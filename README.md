@@ -23,18 +23,18 @@ It was especially clear that failure states matter more than happy paths. One sl
 - React Context (session state, for showing which account is _"logged in"_)
 - ZOD (validates Claudes Structured JSON output)
 
-## Status
-- **In progress:** _Day 0 / Week 1 setup complete. Build starts August 4th, 2026_
+
 
 ## Getting started
-```bash
+```
 npm install
 npm run dev
 ```
 Requires a `.env.local` with:
 ```
-ANTHROPIC_API_KEY=dont_commit_your_api_key_lol
+ANTHROPIC_API_KEY=dont_commit_the_api_key_lol
 ```
+
 
 ## Project structure
 ```
@@ -56,6 +56,8 @@ ANTHROPIC_API_KEY=dont_commit_your_api_key_lol
 /data                   → catalog.json, accounts.json, order-history.json
 ```
 
+
+
 ## Progress log
 
 ### June 30, 2026 — Project setup
@@ -65,7 +67,10 @@ ANTHROPIC_API_KEY=dont_commit_your_api_key_lol
 - Ran a ping test `/api/ping` route returning `{ status: "it works, you did it! :)" }` to verify our tech stack and routing all work together before we start bulding.
 - Started `DECISIONS.md` for tracking important technical choices as we go
 
+
+
+
 ### What's Next
-- **Sprint A:** _Build the messy ERP mock + typed catalog/account/order data_
-- **Sprint B:** _Build out `/login` and `/dashboard` pages, wire up API routes_
-- **Sprint C:** _Get the first working Claude API call + first tool definition (`lookup_sku`)_
+- **Track A:** _Build the mock ERP + typed catalog/account/order data_
+- **Track B:** _Build out `/login` and `/dashboard` pages, wire up API routes_
+- **Track C:** _Get the first working Claude API call + first tool definition (`lookup_sku`)_
