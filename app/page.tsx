@@ -1,5 +1,7 @@
 // This page checks account, redirects to login page or dashboard page.
 
+import Link from "next/link";
+
 
 export default function Home() {
   return (
@@ -8,6 +10,7 @@ export default function Home() {
 
         <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
 
+          <Link className="underline hover:no-underline" href="/reorder">Go to Reorder Page</Link>
           <h2>Home Route</h2>
           <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
             This page is our <strong><em>router</em></strong>. It checks the account state & sends you to either the login page or dashboard page.

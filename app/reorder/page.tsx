@@ -1,5 +1,7 @@
 // reorder page
 
+import Link from "next/link";
+
 export default function Reorder() {
   return (
     <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
@@ -7,9 +9,10 @@ export default function Reorder() {
 
         <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
 
-          <h2>Reorder Page</h2>
+          <Link className="underline hover:no-underline" href="/">Go to Home Page</Link>
+
           <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            This is the reorder page. A magical place.
+            Reorder page
           </h1>
 
         </div>
