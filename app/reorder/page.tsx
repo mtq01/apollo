@@ -9,8 +9,20 @@ export default function Reorder() {
 
         <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
 
-          <Link className="underline hover:no-underline" href="/">Go to Home Page</Link>
+          <Link className="underline hover:no-underline" href="/">
+            Home
+          </Link>
+          <Link className="underline hover:no-underline" href="/dashboard">
+            Dashboard
+          </Link>
 
+          <Link className="underline hover:no-underline" href="/reorder">
+            Reorder
+          </Link>
+
+          <Link className="underline hover:no-underline" href="/login">
+            Login
+          </Link>
           <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
             Reorder page
           </h1>
