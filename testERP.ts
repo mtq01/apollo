@@ -1,4 +1,4 @@
-import { getERPStock } from "../lib/erp/mockERP";
+import { getERPStock } from "./lib/erp/mockERP";
 
 async function testERP() {
   for (let i = 1; i <= 6; i++) {
