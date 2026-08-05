@@ -1,11 +1,13 @@
 /* quote route ping test :*/
 export async function GET() {
   return Response.json({
-    sku: "SKU-441",
-    name: "Example Object Data!!!!!!! weeeeeooooOOOooo",
-    price: 14.20,
+    sku: "SKU-4124",
+    color: "Black",
+    brand: "Nike",
+    name: "Hat",
+    price: 14.2,
     stock: 12,
     leadTimeDays: 2,
-    warehouse: "Warehouse B",
+    warehouse: "Vancouver",
   });
 }
