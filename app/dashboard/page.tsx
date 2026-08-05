@@ -21,6 +21,12 @@ export default function Home() {
           <Link className="underline hover:no-underline" href="/login">
             Login
           </Link>
+          <Link className="underline hover:no-underline" href="/claudetest">
+            Login
+          </Link>
+          <Link className="underline hover:no-underline" href="/claudetest">
+            Claude Test
+          </Link>
 
           <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
             Dashboard Page
