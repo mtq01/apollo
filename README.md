@@ -28,12 +28,14 @@ It was especially clear that failure states matter more than happy paths. One sl
 ## Getting started
 ```
 npm install
+cp .env.example .env.local   # then paste your key in
 npm run dev
 ```
-Requires a `.env.local` with:
+`.env.local` is gitignored, so it won't come down with a clone or pull — every dev makes their own from `.env.example`. It needs:
 ```
 ANTHROPIC_API_KEY=dont_commit_the_api_key_lol
 ```
+Grab a key at [console.anthropic.com](https://console.anthropic.com/settings/keys).
 
 
 ## Project structure
