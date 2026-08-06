@@ -2,6 +2,8 @@
 // later this might need to change, since we will be passing an object of various errors instead of hardcoding.
 // this is all we need for day 3
 // https://www.typescriptlang.org/docs/handbook/2/objects.html
+// interface types for components are best left in the component file. from what i read its just easier to understand/follow this way.
+
 interface DisplayErrorProps {
   error: string;
 }

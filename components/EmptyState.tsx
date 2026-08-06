@@ -1,5 +1,6 @@
 // declare type interface
 // https://www.typescriptlang.org/docs/handbook/2/objects.html
+// interface types for components are best left in the component file. from what i read its just easier to understand/follow this way.
 interface EmptyStateProps {
   message: string;
 }
