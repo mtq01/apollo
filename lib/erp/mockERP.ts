@@ -1,7 +1,4 @@
-export type ERPStockResponse = {
-  stock: number;
-  lastUpdated: string;
-};
+import { ERPStockResponse } from "../../types";
 
 /**
  * Simulates an ERP inventory lookup.
