@@ -1,6 +1,7 @@
-// This page checks account, redirects to login page or dashboard page.
-
 import Link from "next/link";
+import Spinner from "../../components/Spinner";
+import ErrorMessage from "../../components/ErrorMessage";
+import EmptyState from "../../components/EmptyState";
 
 export default function Home() {
   return (
@@ -22,15 +23,17 @@ export default function Home() {
             Login
           </Link>
           <Link className="underline hover:no-underline" href="/claudetest">
-            Login
-          </Link>
-          <Link className="underline hover:no-underline" href="/claudetest">
             Claude Test
           </Link>
 
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
+          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-red-500">
             Dashboard Page
           </h1>
+
+          <h2 className="text-xl font-semibold">Component Testing: </h2>
+          <Spinner />
+          <EmptyState message="test message" />
+          <ErrorMessage error="test error" />
         </div>
       </main>
     </div>

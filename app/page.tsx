@@ -26,19 +26,14 @@ export default function Home() {
             Home Page
           </h2>
           <h1 className="max-w-xs text-xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            This page is our{" "}
-            <strong>
-              <em>router</em>
-            </strong>
-            . It checks the account state & sends you to either the login page
-            or dashboard page.
+            This page will eventually check account state and redirect to <strong>/login</strong> or <strong>/dashboard</strong>
           </h1>
           <p>
-            This page will{" "}
+            It will{" "}
             <strong>
               <em>not</em>
             </strong>{" "}
-            display anything, it will only run the check & route the user where
+            display anything, and will only run the check to route the user where
             they need to be.
           </p>
         </div>
