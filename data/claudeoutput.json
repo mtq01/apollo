@@ -1,0 +1,60 @@
+{
+  "items": [
+    {
+      "rawText": "3 cases of 16oz clear cups",
+      "sku": null,
+      "quantity": 3,
+      "unit": "case",
+      "productGuess": {
+        "name": "cups",
+        "attributes": {
+          "brand": null,
+          "model": null,
+          "color": "clear",
+          "size": "16oz"
+        }
+      },
+      "note": "Size and color given, no brand. Ordered by case, not by unit.",
+      "confidence": "medium"
+    },
+    {
+      "rawText": "2 boxes nitrile gloves large",
+      "sku": null,
+      "quantity": 2,
+      "unit": "box",
+      "productGuess": {
+        "name": "nitrile gloves",
+        "attributes": {
+          "brand": null,
+          "model": null,
+          "color": null,
+          "size": "large"
+        }
+      },
+      "note": "Size given, no brand or model.",
+      "confidence": "medium"
+    },
+    {
+      "rawText": "sku 88231 x4",
+      "sku": "88231",
+      "quantity": 4,
+      "unit": "each",
+      "productGuess": {
+        "name": null,
+        "attributes": {
+          "brand": null,
+          "model": null,
+          "color": null,
+          "size": null
+        }
+      },
+      "note": "SKU given directly, nothing to infer.",
+      "confidence": "high"
+    }
+  ],
+  "unparsed": ["deliver friday"],
+  "summary": {
+    "totalItems": 3,
+    "needsReview": 2
+  }
+}
