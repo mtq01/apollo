@@ -62,7 +62,7 @@ Grab a key at [console.anthropic.com](https://console.anthropic.com/settings/key
 
 ## Progress log
 
-### June 30, 2026 — Project setup
+### July 30, 2026 — Project setup
 - Complete project scaffolding.
 - Connected local repo to GitHub.
 - Set up `.env.local` for the Anthropic API key, .gitignored it
