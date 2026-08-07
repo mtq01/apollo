@@ -1,0 +1,58 @@
+[
+  {
+    "sku": "SKU-1001",
+    "name": "Wireless Mouse",
+    "basePrice": 29.99,
+    "leadTime": 2,
+    "warehouse": "Vancouver"
+  },
+  {
+    "sku": "SKU-1002",
+    "name": "Mechanical Keyboard",
+    "basePrice": 89.99,
+    "leadTime": 5,
+    "warehouse": "Toronto"
+  },
+  {
+    "sku": "SKU-1003",
+    "name": "USB-C Hub",
+    "basePrice": 39.99,
+    "leadTime": 3,
+    "warehouse": "Calgary"
+  },
+  {
+    "sku": "SKU-1004",
+    "name": "27-inch Monitor",
+    "basePrice": 249.99,
+    "leadTime": 7,
+    "warehouse": "Vancouver"
+  },
+  {
+    "sku": "SKU-1005",
+    "name": "Laptop Stand",
+    "basePrice": 49.99,
+    "leadTime": 4,
+    "warehouse": "Montreal"
+  },
+  {
+    "sku": "SKU-1006",
+    "name": "Noise Cancelling Headphones",
+    "basePrice": 179.99,
+    "leadTime": 6,
+    "warehouse": "Toronto"
+  },
+  {
+    "sku": "SKU-1007",
+    "name": "Webcam",
+    "basePrice": 69.99,
+    "leadTime": 2,
+    "warehouse": "Calgary"
+  },
+  {
+    "sku": "SKU-1008",
+    "name": "Portable SSD",
+    "basePrice": 119.99,
+    "leadTime": 5,
+    "warehouse": "Vancouver"
+  }
+]
