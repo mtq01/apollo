@@ -16,7 +16,16 @@ const apiTest = () => {
         return;
       }
       //repsonse.ok is true if the status code is in the 200-299 range
-      console.log(data.message.content[0].text);
+      //the products
+      console.log(
+        //JSON.stringify(value, replacer, space)
+        // null means no replacer, 2 means indent with 2 spaces
+        // if we had a relaccer, we could choose what we want to show, but we want everything, so null is fine
+        JSON.stringify(data.message.content[0].input.products, null, 2),
+      );
+      console.log(
+        JSON.stringify(data.message.content[0].input.summary, null, 2),
+      );
     } catch (error) {
       console.error("Something went wrong:", error);
     }
