@@ -23,7 +23,7 @@
 //A tuple is like an array, but: it has a fixed length and each position has a specific type.  type ProductInfo = [string, number];
 
 // User roles
-export type Role = "buyer" | "manager";
+export type Role = "buyer" | "manager" | "admin";
 
 // Account types
 export type AccountType = "standard" | "contract";

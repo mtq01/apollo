@@ -10,7 +10,7 @@
     "warehouse": "Toronto"
   },
   {
-    "role": "buyer",
+    "role": "admin",
     "accountType": "contract",
     "warehouse": "Calgary"
   }
