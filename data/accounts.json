@@ -1,0 +1,17 @@
+[
+  {
+    "role": "buyer",
+    "accountType": "standard",
+    "warehouse": "Vancouver"
+  },
+  {
+    "role": "manager",
+    "accountType": "contract",
+    "warehouse": "Toronto"
+  },
+  {
+    "role": "buyer",
+    "accountType": "contract",
+    "warehouse": "Calgary"
+  }
+]

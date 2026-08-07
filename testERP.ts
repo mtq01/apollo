@@ -1,3 +1,4 @@
+//test mockERP
 import { getERPStock } from "./lib/erp/mockERP";
 
 async function testERP() {
@@ -12,3 +13,17 @@ async function testERP() {
 }
 
 testERP();
+
+//test data type
+import accounts from "./data/accounts.json";
+import catalog from "./data/catalog.json";
+
+import type { UserContext, Product } from "./types";
+
+
+const users = accounts as UserContext[];
+const products: Product[] = catalog;
+
+
+console.log(users);
+console.log(products);

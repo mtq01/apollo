@@ -32,3 +32,5 @@
   ],
   "exclude": ["node_modules"]
 }
+
+// When we enable "resolveJsonModule": true in the tsconfig.json, TypeScript treats the entire JSON file as if it were the default export. So, no need to use export word.
