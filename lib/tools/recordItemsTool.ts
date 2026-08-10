@@ -1,4 +1,5 @@
 import { Anthropic } from "@anthropic-ai/sdk/index.js";
+import { z } from "zod";
 
 export const record_items: Anthropic.Tool = {
   // https://json-schema.org/learn/getting-started-step-by-step
@@ -164,3 +165,42 @@ This tool does not look up prices, stock, or catalog data. It records what the b
     additionalProperties: false,
   },
 };
+
+// : https://zod.dev/basics now lets validate this json schema with zod.
+
+/*
+ * same shape as input_schema above, rewritten in zod.
+ *
+ * input_schema is what we SEND claude. this is what we CHECK when it answers.
+ * no descriptions down here those are instructions for claude as they create the fields
+ * up there where claude reads them.
+ *
+ * two things from up there are missing on purpose:
+ *   required               zod fields are required unless you add .optional()
+ *   additionalProperties   z.object() already strips keys it doesn't know
+ */
+export const recordItemsSchema = z.object({
+  products: z.array(
+    z.object({
+      rawText: z.string(),
+      sku: z.string().nullable(),
+      quantity: z.number().nullable(),
+      unit: z.string().nullable(),
+      productGuess: z.object({
+        name: z.string().nullable(),
+        attributes: z.object({
+          brand: z.string().nullable(),
+          model: z.string().nullable(),
+          color: z.string().nullable(),
+          size: z.string().nullable(),
+        }),
+      }),
+      note: z.string(),
+      confidence: z.enum(["high", "medium", "low"]),
+    }),
+  ),
+  summary: z.object({
+    totalItems: z.number(),
+    needsReview: z.number(),
+  }),
+});
