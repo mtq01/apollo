@@ -1,17 +1,23 @@
 [
   {
-    "role": "buyer",
+    "id": 1,
+    "name": "Alex",
+    "role": "admin",
     "accountType": "standard",
     "warehouse": "Vancouver"
   },
   {
+    "id": 2,
+    "name": "Mahtab",
     "role": "manager",
     "accountType": "contract",
     "warehouse": "Toronto"
   },
   {
+    "id": 3,
+    "name": "Mike",
     "role": "buyer",
-    "accountType": "contract",
+    "accountType": "standard",
     "warehouse": "Calgary"
   }
 ]
