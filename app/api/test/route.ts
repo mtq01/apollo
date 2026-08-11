@@ -65,6 +65,10 @@ export async function POST() {
     if (error instanceof Anthropic.APIError) {
       console.log(error.status); // 400
       console.log(error.name); // BadRequestError
+      // error: error.message IS THE ERROR MESSAGE WE SEND BACK IN THE BODY OF THE RESPONSE.
+      // error.status IS THE HTTP STATUS CODE WE SEND BACK IN THE RESPONSE. IT IS NOT THE ERROR MESSAGE.
+      // Response.json(body, options)
+      // body always goes first. options second
       return Response.json({ error: error.message }, { status: error.status });
     } else {
       throw error;
