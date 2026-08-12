@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import Nav from "@/components/Nav";
+import { Roboto } from "next/font/google";
+import Header from "@/components/Header";
 
 // fonts
 const geistSans = Geist({
@@ -13,12 +16,16 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const roboto = Roboto({
+  variable: "--font-roboto",
+  subsets: ["latin"],
+});
+
 // meta data
 export const metadata: Metadata = {
   title: "Apollo | by Gravity",
   description: "ERP Tool",
 };
-
 
 // children is marked 'Readonly' as a safety habit. layout should never reassign children only render it
 export default function RootLayout({
@@ -29,9 +36,15 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${roboto.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="flex flex-row">
+        <Nav />
+        <div className="min-h-dvh flex flex-col flex-1 min-w-0">
+          <Header />
+          <main className="flex-1">{children}</main>
+        </div>
+      </body>
     </html>
   );
 }
