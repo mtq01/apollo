@@ -1,6 +1,6 @@
-import type { AccountProductParams, ActivityEvent } from "../../types";
+import type { AccountProductParams, ActivityEvent, ForcedFailure} from "../../types";
 import { calculatePrice, seeStock, accessWarehouse } from "./accountRules";
-import { getERPStock } from "../erp/mockERP";
+import { getERPStock } from "./mockERP";
 
 /* This function combines the 3 functions Mahtab created in Week 1 */
 
@@ -17,7 +17,8 @@ interface QuoteResult {
 
 
 // takes an account + product and returns 1 combined priced/stocked result
-export async function getQuoteForProduct({ account, product}: AccountProductParams): Promise<QuoteResult> {
+// forceFailure is optional, it lets a us trigger a specific ERP failure on demand, for testing/demo
+export async function getQuoteForProduct({ account, product}: AccountProductParams, forceFailure?: ForcedFailure): Promise<QuoteResult> {
 
   const events: ActivityEvent[] = [];                               // will hold every log entry for this quote
   let eventCount = 0;                                               // gives each event a simple unique id (this needs to be changed later as per DECISIONS.md)
@@ -42,7 +43,7 @@ export async function getQuoteForProduct({ account, product}: AccountProductPara
   let stockLastUpdated: string | "hidden" = "hidden";               // same default for the timestamp
 
   if (canSeeStock) {
-    const stockResponse = await getERPStock(product.sku);           // ask the fake ERP for current stock (can be slow/fail)
+    const stockResponse = await getERPStock(forceFailure);          // ask the fake ERP for stock (normally random), but throws immediately if forceFailure was passed.
     stock = stockResponse.stock;                                    // pull the number out of the response
     stockLastUpdated = stockResponse.lastUpdated;                   // pull the timestamp out too
     addEvent(`Stock Checked: ${stock} available`);                  // log that the stock check finished
