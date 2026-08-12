@@ -43,6 +43,7 @@ export interface Product {
   name: string;
   basePrice: number;
   leadTime: number;
+  stock: number,
   warehouse: string;
 }
 
