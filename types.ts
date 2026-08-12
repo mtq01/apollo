@@ -66,11 +66,6 @@ export type ErrorType =
       message: string;
     };
 
-export type ERPStockResponse = {
-  stock: number;
-  lastUpdated: string;
-};
-
 
 export interface AccountProductParams {
   account: UserContext;

@@ -1,31 +1,43 @@
 import type { UserContext, Product } from "../../types";
 
-// 1. Calculate product price based on account type (contract accounts get 10% discount).
-//Destructuring means taking values out of an object or array and putting them into variables
-export function calculatePrice(
-{            //start destructuring
-  account,   //take account from the object
-  product,   //take product from the object
-}            //end destructuring
-: {
-  account: UserContext; //describing the input object's types
-  product: Product;
-}): number { //number here describes the type of value the function returns.
-  if (account.accountType === "contract") {
-    return product.basePrice * 0.9; // we want 10% off, so basePrice * 0.9 will return the remaning amount after discount
-  } else {
-    return product.basePrice;
-  }
-}
 
-// 2. Decide whether an account can see a product's stock
-export function seeStock({
-  account,
-  product,
-}: {
+/* [calculatePriceParams]: defines the TYPE (shape for our data). 
+
+  - It says "anything of this type must be an object with an 'account' property of type 'UserContext',
+  and a 'product' property of type 'Product' "
+  - This is for TypeScript to check that whoever calls the function passes the right shape of data.
+  - It also gives you autocomplete/error checking in the editor.
+
+  [function calculatePrice]:
+
+    - The function takes 1 argument (an object).
+    - It uses destructuring directly in the parameter list and pulls 'account' and 'product' out in their own local variables immediately.
+    - ': AccountProductParams' tells TypeScript that the incoming object must match the shape defined above.
+    - ': number' says the function will return a number.
+
+  [CONTRACT_DISCOUNT]:
+    
+    - Our discount multiplier. Instead of burying '0.9' later in our calculation we clearly define it with a descriptive name up front.
+
+*/
+interface AccountProductParams {
   account: UserContext;
   product: Product;
-}): boolean {
+}
+
+export function calculatePrice({ account, product }: AccountProductParams): number {
+  const CONTRACT_DISCOUNT = 0.9; // contract accounts get 10% off
+
+  if (account.accountType === "contract") {
+    return product.basePrice * CONTRACT_DISCOUNT;
+  }
+
+  return product.basePrice;
+}
+
+
+// Decide whether an account can see a product's stock numbers at all.
+export function seeStock({ account, product }: AccountProductParams): boolean {
   switch (account.role) {
     case "admin":
       return true;
@@ -35,58 +47,31 @@ export function seeStock({
 
     case "buyer":
       return account.warehouse === product.warehouse;
+
+    default:
+      // Unknown role. fail closed, not open.
+      return false;
   }
 }
 
-// 3. Decide whether an account can access a product's warehouse
-export function accessWarehouse({
-  account,
-  product,
-}: {
-  account: UserContext;
-  product: Product;
-}): boolean {
+
+// Decide whether an account can see which warehouse a product ships from.
+export function accessWarehouse({ account, product }: AccountProductParams): boolean {
   switch (account.role) {
-  case "admin":
-    return true;
+    case "admin":
+      return true;
 
-  case "manager":
-    return account.warehouse === product.warehouse;
+    case "manager":
+      return account.warehouse === product.warehouse;
 
-  case "buyer":
-    return account.warehouse === product.warehouse;
-}}
+    case "buyer":
+      return account.warehouse === product.warehouse;
 
-// Combined function
-export function getProductResult({
-  account,
-  product,
-}: {
-  account: UserContext;
-  product: Product;
-}) {
-  const price = calculatePrice({
-    account,
-    product,
-  });
-
-  const stockVisible = seeStock({
-    account,
-    product,
-  });
-
-  const warehouseVisible = accessWarehouse({
-    account,
-    product,
-  });
-
-  return {
-    sku: product.sku,
-    name: product.name,
-    price,
-    leadTime: product.leadTime,
-    warehouse: product.warehouse,
-    stockVisible,
-    warehouseVisible,
-  };
+    default:
+      // Unknown role. fail closed, not open.
+      return false;
+  }
 }
+
+
+

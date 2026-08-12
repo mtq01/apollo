@@ -1,5 +1,5 @@
 import type { AccountProductParams, ActivityEvent } from "../../types";
-import { calculatePrice, seeStock, accessWarehouse } from "../erp/accountRulesUpdate";
+import { calculatePrice, seeStock, accessWarehouse } from "./accountRules";
 import { getERPStock } from "../erp/mockERP";
 
 /* This function combines the 3 functions Mahtab created in Week 1 */
@@ -42,7 +42,7 @@ export async function getQuoteForProduct({ account, product}: AccountProductPara
   let stockLastUpdated: string | "hidden" = "hidden";               // same default for the timestamp
 
   if (canSeeStock) {
-    const stockResponse = await getERPStock();                      // ask the fake ERP for current stock (can be slow/fail)
+    const stockResponse = await getERPStock(product.sku);           // ask the fake ERP for current stock (can be slow/fail)
     stock = stockResponse.stock;                                    // pull the number out of the response
     stockLastUpdated = stockResponse.lastUpdated;                   // pull the timestamp out too
     addEvent(`Stock Checked: ${stock} available`);                  // log that the stock check finished

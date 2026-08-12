@@ -1,4 +1,4 @@
-import { getQuoteForProduct } from "./productQuote";
+import { getQuoteForProduct } from "../erp/productQuote";
 import type { UserContext, Product } from "../../types";
 import accountsData from "../../data/accounts.json";        // raw sample accounts
 import productsData from "../../data/catalog.json";         // raw sample products
