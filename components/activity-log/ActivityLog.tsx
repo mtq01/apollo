@@ -21,13 +21,7 @@
 */
 
 
-
-// Interface for a single ActivityEvent
-interface ActivityEvent {
-  id: string;
-  message: string;
-  timestamp: string;
-}
+import { ActivityEvent } from "@/types";
 
 
 // ActivityEvent[] = an array where every item must match the ActivityEvent shape. (Our logData has 3 activities to log, so 3 objects to store.)
