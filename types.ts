@@ -69,3 +69,16 @@ export type ERPStockResponse = {
   stock: number;
   lastUpdated: string;
 };
+
+
+export interface AccountProductParams {
+  account: UserContext;
+  product: Product;
+}
+
+
+export interface ActivityEvent {
+  id: string;
+  message: string;
+  timestamp: string;
+}
