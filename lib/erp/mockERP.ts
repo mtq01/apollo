@@ -1,4 +1,9 @@
-import { ERPStockResponse } from "../../types";
+import catalog from "../../data/catalog.json";
+
+export type ERPStockResponse = {
+  stock: number;
+  lastUpdated: string;
+};
 
 /**
  * Simulates an ERP inventory lookup.
@@ -7,9 +12,9 @@ import { ERPStockResponse } from "../../types";
  * - Otherwise returns stock + timestamp
  */
 
-//In a real ERP system, we'd likely do something like: const response = await fetch("/api/erp");
-
-export async function getERPStock(): Promise<ERPStockResponse> {
+export async function getERPStock(
+  sku: string //A SKU is a unique product identifier. So it's a good way for the ERP system to know exactly which product's stock we want
+): Promise<ERPStockResponse> {
   // Random delay (300–1500ms)
   const delay = Math.floor(Math.random() * 1200) + 300;
 
@@ -20,8 +25,18 @@ export async function getERPStock(): Promise<ERPStockResponse> {
     throw new Error("ERP request timed out");
   }
 
+  // Find the product in the catalog
+  const product = catalog.find(
+    (product) => product.sku === sku
+  );
+
+  // Product wasn't found
+  if (!product) {
+    throw new Error(`Product ${sku} not found`);
+  }
+
   return {
-    stock: Math.floor(Math.random() * 500),
+    stock: product.stock,
     lastUpdated: new Date().toISOString(),
   };
 }
