@@ -97,7 +97,7 @@ export async function POST() {
       name: "Mahtab",
       role: "manager" as const, //as const tells TypeScript: This is specifically the value "manager", not just some string.
       accountType: "contract" as const,
-      warehouse: "Toronto",
+      assignedWarehouse: "Toronto",
     };
 
 // We're going to put the final result for each requested product inside this array. for example: results = [keyboard result, mouse result]
