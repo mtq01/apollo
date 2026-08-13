@@ -38,7 +38,7 @@ export interface UserContext {
   name: string;
   role: Role;
   accountType: AccountType;
-  warehouse: string;          // which warehouse this account is based in, used for visibility checks
+  assignedWarehouse: string;          // which warehouse this account is assigned too, for shipping/inventory checks.
 }
 
 // One product from the catalog. This is static, unchanging data. Real-time info like stock comes from getERPStock instead, not from here.
@@ -79,8 +79,8 @@ export interface AccountProductParams {
   product: Product;
 }
 
-/* One entry in a quote's activity log (e.g. "Price Calculated: $90"). Produced by Track A (getQuoteForProduct) 
-and rendered by Track B (DisplayActivity). */
+/* used for logging a short, readable msg history of what action was taken.
+[example]: the 'getQuoteForProduct' function in 'productQuote.ts' will log the product quote & time it took place. */
 export interface ActivityEvent {
   id: string;
   message: string;

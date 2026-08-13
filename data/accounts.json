@@ -4,20 +4,20 @@
     "name": "Alex",
     "role": "admin",
     "accountType": "standard",
-    "warehouse": "Vancouver"
+    "assignedWarehouse": "Vancouver"
   },
   {
     "id": 2,
     "name": "Mahtab",
     "role": "manager",
     "accountType": "contract",
-    "warehouse": "Toronto"
+    "assignedWarehouse": "Toronto"
   },
   {
     "id": 3,
     "name": "Mike",
     "role": "buyer",
     "accountType": "standard",
-    "warehouse": "Calgary"
+    "assignedWarehouse": "Calgary"
   }
 ]

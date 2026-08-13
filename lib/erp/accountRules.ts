@@ -46,10 +46,11 @@ export function seeStock({ account, product }: AccountProductParams): boolean {
       return true;
 
     case "buyer":
-      return account.warehouse === product.warehouse;
+      // buyers only see stock info for products shipping from the exact warehouse their account is assigned to. (direct match, not nearest)
+      return account.assignedWarehouse === product.warehouse;
 
     default:
-      // Unknown role. fail closed, not open.
+      // unrecognized role, default to hiding the data, not showing it.
       return false;
   }
 }
@@ -62,13 +63,15 @@ export function accessWarehouse({ account, product }: AccountProductParams): boo
       return true;
 
     case "manager":
-      return account.warehouse === product.warehouse;
+      // managers can only see the warehouse name if it matches their assigned warehouse
+      return account.assignedWarehouse === product.warehouse;
 
     case "buyer":
-      return account.warehouse === product.warehouse;
+      // same rule as managers.
+      return account.assignedWarehouse === product.warehouse;
 
     default:
-      // Unknown role. fail closed, not open.
+      // unrecognized role, default to hiding the data, not showing it.
       return false;
   }
 }

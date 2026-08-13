@@ -10,7 +10,7 @@ import type { ForcedFailure } from "@/types";
 
 
 // Shape of a successful stock check. How much stock and when it was checked.
-export type ERPStockResponse = {
+type ERPStockResponse = {
   stock: number;
   lastUpdated: string;
 };
@@ -43,7 +43,7 @@ export async function getERPStock(forceFailure?: ForcedFailure): Promise<ERPStoc
 
   // 15% random chance of simulating a real (unforced) timeout.
   if (Math.random() < 0.15) {
-    throw new Error("ERP request timed out");
+    throw new Error("ERP request timed out (15% chance of this happening)");
   }
 
   return {
