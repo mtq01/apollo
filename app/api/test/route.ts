@@ -3,6 +3,8 @@
 
 import { Anthropic } from "@anthropic-ai/sdk";
 import { record_items, recordItemsSchema } from "@/lib/tools/recordItemsTool";
+import { lookupProduct } from "@/lib/erp/productLookup";
+import { getQuoteForProduct } from "@/lib/erp/productQuote";
 
 const anthropic = new Anthropic();
 console.log("hello3");
@@ -19,7 +21,7 @@ export async function POST() {
       messages: [
         {
           role: "user",
-          content: "hi 1 milliion skus",
+          content: "I need 2 mechanical keyboards and 1 wireless mouse", // We need to connect this part to the UI. right now is hard coded for testing.
         },
       ],
     });
@@ -58,7 +60,88 @@ export async function POST() {
         { status: 502 },
       );
     }
-    return Response.json({ output: result.data });
+
+//explain everything in plain English
+
+// 1. Get Claude's validated JSON.
+//           
+// 2. Pretend the customer is Mahtab.
+//           
+// 3. Create an empty results array.
+//           
+// 4. Take each item Claude found.
+//           
+// 5. Look for that item in catalog.json.
+//           
+// 6. If it doesn't exist:
+//        save "Product not found"
+//        move to the next item.
+//           
+// 7. If it exists:
+//        send account + product
+//        to getQuoteForProduct().
+//           
+// 8. Add the quote to results.
+//           
+// 9. After ALL items are processed,
+//        return parsed data + results.
+
+
+    // result.data is now the parsed customer request
+    const parsedItems = result.data;
+
+    // This acoount is temporary. Eventually, the account would probably come from our login/session rather than being written directly in the route.
+
+    const mahtab = {
+      id: 2,
+      name: "Mahtab",
+      role: "manager" as const, //as const tells TypeScript: This is specifically the value "manager", not just some string.
+      accountType: "contract" as const,
+      assignedWarehouse: "Toronto",
+    };
+
+// We're going to put the final result for each requested product inside this array. for example: results = [keyboard result, mouse result]
+    const results = [];
+
+    for (const item of parsedItems.products) {
+      // Find the real product in our catalog
+      const product = lookupProduct({
+        sku: item.sku,
+        productName: item.productGuess.name,
+      });
+
+      // Product wasn't found
+      if (!product) {
+        results.push({
+          requestedItem: item.rawText,
+          quantity: item.quantity,
+          error: "Product not found",
+        });
+
+        continue; // continue means stop processing this particular item and move to the next item in the loop.
+      }
+
+      // Run pricing / stock / warehouse logic
+      const quote = await getQuoteForProduct({
+        account: mahtab,
+        product,
+      });
+
+      results.push({
+        requestedItem: item.rawText,
+        quantity: item.quantity,
+        ...quote, // ...quote copies the properties from quote into the new object.
+      });
+    }
+
+    // return everything
+    return Response.json({
+      parsed: parsedItems,
+      results,
+    });
+
+
+    // return Response.json({ output: result.data });
   } catch (error) {
     // https://platform.claude.com/docs/en/cli-sdks-libraries/sdks/typescript#handling-errors
     // claude api built in error suppoerter if we want to handle errors with more detail specifically to the api"
