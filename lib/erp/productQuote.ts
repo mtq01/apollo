@@ -14,6 +14,7 @@ interface QuoteResult {
   leadTime: number;                                                 // days until product ships
   warehouse: string | "hidden";                                     // ship-from warehouse, or "hidden"
   events: ActivityEvent[];                                          // log of what happened while building this quote
+  calculatedAt: string;
 }
 
 
@@ -52,6 +53,15 @@ export async function getQuoteForProduct({ account, product}: AccountProductPara
     addEvent(`Stock Checked: ${stock} available`);                  // log that the stock check finished
   }
 
+
+  /* +++++ Record when this quote was ACTUALLY calculated +++++
+    - Save the exact time this quote was put together.
+    - If this same quote gets reused later from a saved copy instead of being rebuilt 
+    from scratch, the time stays the same. It always tells the truth about how old 
+    the price/stock numbers really are. */
+  const calculatedAt = new Date().toISOString();
+
+
   // Build and return the final combined result.
   return {
     sku: product.sku,
@@ -61,5 +71,6 @@ export async function getQuoteForProduct({ account, product}: AccountProductPara
     leadTime: product.leadTime,
     warehouse: canSeeWarehouse ? product.warehouse : "hidden",      // only include warehouse if allowed
     events,                                                         // full log of everything that happened above
+    calculatedAt,
   };
 }
