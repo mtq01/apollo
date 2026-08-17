@@ -1,6 +1,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { Order } from "@/types";
+import { revalidateTag } from "next/cache";
 
 
 /* [ Documentation ] 
@@ -27,6 +28,12 @@ export async function addOrder(order: Order): Promise<Order> {
   // [fs.writeFile]: saves the text back into the file, overwrites what was there.
   // [JSON.stringify()]: turns the array back into text. The 'null, 2' part make it print nicely formatted with 2 space indents, instead of all on one line.
   await fs.writeFile(filePath, JSON.stringify(orders, null, 2));
+
+  /* [On-Demand Revalidation]:
+  A new order was just saved, so any stock numbers already cached under the "stock" tag are 
+  now out of date. This clears them out, so the next stock check looks up a fresh number instead 
+  of reusing the old one. */
+  revalidateTag("stock", "max");
 
   // hands back the order that was just added, in case whatever calls this function want to confirm it or show it on screen.
   return order;
