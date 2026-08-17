@@ -31,3 +31,12 @@ export async function addOrder(order: Order): Promise<Order> {
   // hands back the order that was just added, in case whatever calls this function want to confirm it or show it on screen.
   return order;
 }
+
+
+// get order history function
+export async function getOrderHistory(accountId: number): Promise<Order[]> {
+  const raw = await fs.readFile(filePath, "utf-8");
+  const orders: Order[] = JSON.parse(raw);
+
+  return orders.filter((order) => order.accountId === accountId);
+}
