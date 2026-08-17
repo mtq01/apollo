@@ -2,6 +2,11 @@
 "use client";
 
 import { useState } from "react";
+import Loader from "@/components/Loader";
+import { CircleAlert, TriangleAlert } from "@/components/icons";
+import EmptyState from "@/components/EmptyState";
+import ErrorMessage from "@/components/ErrorMessage";
+import { ErrorType } from "@/types";
 
 type QuoteRow = {
   sku: string;
@@ -12,7 +17,8 @@ type QuoteRow = {
   leadTime: number;
   warehouse: string;
 };
-// I Created new fake results because the ones in the json didnt have stock
+
+//Fake activity for noiw
 
 const fakeActivity = [
   {
@@ -42,15 +48,26 @@ const fakeActivity = [
 ];
 
 export default function Reorder() {
+  // Create Loading State, Error State, Text State, and Results State
+  const [isLoading, setLoading] = useState(false);
+  const [error, setError] = useState<ErrorType | null>(null);
   const [text, setText] = useState("");
-  const [results, setResults] = useState<QuoteRow[]>([]);
+  const [results, setResults] = useState<QuoteRow[] | null>(null);
 
+  // Function to get quote from the server
   const getQuote = async () => {
+    setLoading(true);
+    setError(null);
     try {
       const response = await fetch("/api/quote", { method: "POST" });
 
       if (!response.ok) {
         console.error(`Request failed (${response.status})`);
+        //setting generic error message in front end if failed
+        setError({
+          type: "request failed",
+          message: "Couldn't get a quote. Please try again later.",
+        });
         return;
       }
 
@@ -58,8 +75,22 @@ export default function Reorder() {
       setResults(data);
     } catch (error) {
       console.error("Something went wrong:", error);
+    } finally {
+      setLoading(false);
     }
   };
+  /* Say you type "SKU".
+    You press S:
+  
+    function runs, e.target.value is "S"
+    You press K:
+
+    function runs, e.target.value is "SK"
+    setText("SK")
+     You press U:
+
+     function runs, e.target.value is "SKU"
+    setText("SKU") */
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setText(e.target.value);
@@ -91,31 +122,35 @@ export default function Reorder() {
           </label>
           <button
             type="submit"
-            disabled={!text.trim()}
-            className="self-start rounded-lg bg-black px-4 py-2 text-apollo-light hover:bg-zinc-800 "
+            disabled={!text.trim() || isLoading}
+            className="self-start rounded-lg bg-black px-4 py-2 text-apollo-light hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Get quote
           </button>
         </form>
+        {isLoading ? (
+          <div className="flex w-full flex-col items-center gap-4 py-16">
+            <Loader />
 
-        {results.length > 0 && (
+            <p className="text-lg">Getting quote...</p>
+          </div>
+        ) : error ? (
+          <div
+            role="alert"
+            className="flex w-full items-center gap-3 rounded-lg bg-red-200 px-4 py-3 text-sm text-red-900"
+          >
+            <CircleAlert aria-hidden="true" className="size-5" />
+            <p>{error}</p>
+          </div>
+        ) : results === null ? null : results.length === 0 ? (
+          <EmptyState message="No matching products found." />
+        ) : (
           <>
             <div
               role="status"
               className="flex w-full items-center gap-3 rounded-lg bg-orange-200 px-4 py-3 text-sm text-black mb-2"
             >
-              <svg
-                viewBox="0 0 20 20"
-                fill="currentColor"
-                aria-hidden="true"
-                className="size-5 shrink-0"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                  clipRule="evenodd"
-                />
-              </svg>
+              <TriangleAlert aria-hidden="true" className="size-5" />
               <p>
                 Stock data may be a few hours old for SKU-4410. Confirm before
                 ordering.

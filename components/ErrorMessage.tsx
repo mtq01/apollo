@@ -1,5 +1,6 @@
 // import ErrorType object (ErrorType is a Discriminated Union)
 import { ErrorType } from "../types";
+import { CircleAlert } from "@/components/icons";
 
 /* 
 [Documentation]
@@ -26,28 +27,46 @@ import { ErrorType } from "../types";
   - Each case returns its own JSX immediately.
 */
 
-
-
 // destructures 'error' out of the props object & tells TypeScript that the props object 'error' field must be typed as ErrorType
 function DisplayError({ error }: { error: ErrorType }) {
-  // checks error.type against each case, and once it finds a match, returns that cases message as JSX.
+  // checks error.type against each case, and once it finds a match, and sets the message to that specific error message.
+  let message: string;
   switch (error.type) {
     case "not found":
-      return <h1>{error.message}</h1>;
+      message = error.message;
+      // break just means stop, exit the switch if theres a match
+      break;
 
     case "timeout":
-      return <h1>{error.message}</h1>;
+      message = error.message;
+      break;
 
     case "restricted":
-      return <h1>{error.message}</h1>;
+      message = error.message;
+      break;
 
     case "invalid input":
-      return <h1>{error.message}</h1>;
+      message = error.message;
+      break;
+
+    case "request failed":
+      message = error.message;
+      break;
 
     // if no cases match, return a default error. its a safety net that shouldnt normally trigger.
     default:
-      return <h1>An unexpected error occured.</h1>;
+      message = "An unexpected error occurred.";
   }
+
+  return (
+    <div
+      role="alert"
+      className="flex w-full items-center gap-3 rounded-lg bg-red-200 px-4 py-3 text-sm text-red-900"
+    >
+      <CircleAlert aria-hidden="true" className="size-5" />
+      <p>{message}</p>
+    </div>
+  );
 }
 
 export default DisplayError;
