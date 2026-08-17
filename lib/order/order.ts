@@ -1,6 +1,6 @@
 import { promises as fs } from "fs";
 import path from "path";
-import { Order } from "@/types";
+import type { Order } from "@/types";
 import { revalidateTag } from "next/cache";
 
 
@@ -40,7 +40,8 @@ export async function addOrder(order: Order): Promise<Order> {
 }
 
 
-// get order history function
+/* Returns just one account's past orders. Reads the same file addOrder
+ writes to, then filters it down to entries matching this accountId. */
 export async function getOrderHistory(accountId: number): Promise<Order[]> {
   const raw = await fs.readFile(filePath, "utf-8");
   const orders: Order[] = JSON.parse(raw);
