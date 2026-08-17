@@ -1,6 +1,7 @@
 import type { AccountProductParams, ActivityEvent, ForcedFailure} from "../../types";
 import { calculatePrice, seeStock, accessWarehouse } from "./accountRules";
 import { getERPStock } from "./mockERP";
+import { randomUUID } from "crypto";
 
 /* This function combines the 3 functions created in Week 1: 'accountRules.ts' */
 
@@ -13,6 +14,7 @@ interface QuoteResult {
   leadTime: number;                                                 // days until product ships
   warehouse: string | "hidden";                                     // ship-from warehouse, or "hidden"
   events: ActivityEvent[];                                          // log of what happened while building this quote
+  calculatedAt: string;
 }
 
 
@@ -21,14 +23,12 @@ export async function getQuoteForProduct({ account, product}: AccountProductPara
 
   // +++++ Activity log setup +++++
   const events: ActivityEvent[] = [];                               // will hold every log entry for this quote
-  let eventCount = 0;                                               // gives each event a simple unique id (this needs to be changed later as per DECISIONS.md)
 
   // +++++ addEvent helper function
   // prevents repeating the same 4-line object everytime we log something
   function addEvent(message: string) {
-    eventCount += 1;                                                // increase the counter so each id is different
     events.push({
-      id: `event-${eventCount}-temp-ID-needs-to-be-changed-later`,  // unique within this 1 quote
+      id: crypto.randomUUID(),                                      // creates a unique 36character long v4 UUID - https://developer.mozilla.org/en-US/docs/Web/API/Crypto/randomUUID
       message,                                                      // human-friendly description of what happened
       timestamp: new Date().toISOString(),                          // when it happened
     });
@@ -53,6 +53,15 @@ export async function getQuoteForProduct({ account, product}: AccountProductPara
     addEvent(`Stock Checked: ${stock} available`);                  // log that the stock check finished
   }
 
+
+  /* +++++ Record when this quote was ACTUALLY calculated +++++
+    - Save the exact time this quote was put together.
+    - If this same quote gets reused later from a saved copy instead of being rebuilt 
+    from scratch, the time stays the same. It always tells the truth about how old 
+    the price/stock numbers really are. */
+  const calculatedAt = new Date().toISOString();
+
+
   // Build and return the final combined result.
   return {
     sku: product.sku,
@@ -62,5 +71,6 @@ export async function getQuoteForProduct({ account, product}: AccountProductPara
     leadTime: product.leadTime,
     warehouse: canSeeWarehouse ? product.warehouse : "hidden",      // only include warehouse if allowed
     events,                                                         // full log of everything that happened above
+    calculatedAt,
   };
 }

@@ -1,0 +1,62 @@
+[
+  {
+    "id": "order-1",
+    "accountId": 1,
+    "items": [
+      { "sku": "SKU-1001", "quantity": 2 },
+      { "sku": "SKU-1004", "quantity": 1 }
+    ],
+    "timestamp": "2026-07-14T09:15:00Z"
+  },
+  {
+    "id": "order-2",
+    "accountId": 1,
+    "items": [
+      { "sku": "SKU-1008", "quantity": 1 }
+    ],
+    "timestamp": "2026-07-28T13:40:00Z"
+  },
+  {
+    "id": "order-3",
+    "accountId": 1,
+    "items": [
+      { "sku": "SKU-1002", "quantity": 1 },
+      { "sku": "SKU-1001", "quantity": 3 }
+    ],
+    "timestamp": "2026-08-09T10:05:00Z"
+  },
+  {
+    "id": "order-4",
+    "accountId": 2,
+    "items": [
+      { "sku": "SKU-1002", "quantity": 5 },
+      { "sku": "SKU-1006", "quantity": 5 }
+    ],
+    "timestamp": "2026-07-18T11:20:00Z"
+  },
+  {
+    "id": "order-5",
+    "accountId": 2,
+    "items": [
+      { "sku": "SKU-1006", "quantity": 2 }
+    ],
+    "timestamp": "2026-08-04T15:50:00Z"
+  },
+  {
+    "id": "order-6",
+    "accountId": 3,
+    "items": [
+      { "sku": "SKU-1003", "quantity": 4 },
+      { "sku": "SKU-1007", "quantity": 2 }
+    ],
+    "timestamp": "2026-07-21T08:30:00Z"
+  },
+  {
+    "id": "order-7",
+    "accountId": 3,
+    "items": [
+      { "sku": "SKU-1003", "quantity": 2 }
+    ],
+    "timestamp": "2026-08-06T16:10:00Z"
+  }
+]
