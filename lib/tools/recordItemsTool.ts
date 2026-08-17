@@ -47,6 +47,13 @@ This tool does not look up prices, stock, or catalog data. It records what the b
   input_schema: {
     type: "object",
     properties: {
+
+      intent: {
+        type: "string",
+        enum: ["product_request", "reorder"],
+        description:
+          "The customer's request type. Use 'reorder' when the customer asks to reorder a previous or last order. Otherwise use 'product_request'.",
+           },
       products: {
         type: "array",
         description:
@@ -180,6 +187,7 @@ This tool does not look up prices, stock, or catalog data. It records what the b
  *   additionalProperties   z.object() already strips keys it doesn't know
  */
 export const recordItemsSchema = z.object({
+  intent: z.enum(["product_request", "reorder"]),
   products: z.array(
     z.object({
       rawText: z.string(),

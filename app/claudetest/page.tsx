@@ -96,13 +96,11 @@ const apiTest = () => {
        */
       const data = await response.json();
 
-      console.log(
-        //JSON.stringify(value, replacer, space)
-        // null means no replacer, 2 means indent with 2 spaces
-        // if we had a relaccer, we could choose what we want to show, but we want everything, so null is fine
-        JSON.stringify(data.output.products, null, 2),
-      );
-      console.log(JSON.stringify(data.output.summary, null, 2));
+      //JSON.stringify(value, replacer, space)
+      // null means no replacer, 2 means indent with 2 spaces
+      // if we had a relaccer, we could choose what we want to show, but we want everything, so null is fine
+
+      console.log(JSON.stringify(data.results, null, 2));
     } catch (error) {
       console.error("Something went wrong:", error);
     }

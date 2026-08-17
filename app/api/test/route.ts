@@ -21,7 +21,7 @@ export async function POST() {
       messages: [
         {
           role: "user",
-          content: "I need 2 mechanical keyboards and 1 wireless mouse", // We need to connect this part to the UI. right now is hard coded for testing.
+          content: "I need 2 keyboards", // We need to connect this part to the UI. right now is hard coded for testing.
         },
       ],
     });
@@ -122,6 +122,7 @@ export async function POST() {
       }
 
       // Run pricing / stock / warehouse logic
+      try{
       const quote = await getQuoteForProduct({
         account: mahtab,
         product,
@@ -133,14 +134,14 @@ export async function POST() {
         ...quote, // ...quote copies the properties from quote into the new object.
       });
     }
-
+catch(error){
+console.log("test test error")
+  }}
     // return everything
     return Response.json({
       parsed: parsedItems,
       results,
     });
-
-
     // return Response.json({ output: result.data });
   } catch (error) {
     // https://platform.claude.com/docs/en/cli-sdks-libraries/sdks/typescript#handling-errors
