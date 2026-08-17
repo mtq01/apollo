@@ -1,6 +1,6 @@
 import { addOrder, getOrderHistory } from "../order/order"; 
-
 import { getERPStock } from "../erp/mockERP";
+
 async function main() {
   // Confirm the same sku returns the same stock number every time
   const a = await getERPStock("SKU-1001");

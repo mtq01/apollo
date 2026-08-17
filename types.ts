@@ -97,7 +97,7 @@ export type ForcedFailure = "timeout" | "not found";
 
 
 export interface Order {
-  type: string;
+  id: string;
   accountId: number;
   items: { sku: string; quantity: number }[];
   timestamp: string;
