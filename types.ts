@@ -53,7 +53,10 @@ export interface Product {
 
 /* Describes an error that already happened, with a human-readable message.
 Used for general app-wide errors (not the same as ForcedFailure below, which is for 
-deliberately triggering a specific failure before it happens). */
+deliberately triggering a specific failure before it happens).
+
+This is a 'discrimiated union'.
+*/
 export type ErrorType =
   | {
       type: "not found";
@@ -90,3 +93,12 @@ export interface ActivityEvent {
 /* The specific failures getERPStock can be forced to throw on demand, for testing and demoing. 
 Bypasses the normal random delay/chance. */
 export type ForcedFailure = "timeout" | "not found";
+
+
+
+export interface Order {
+  type: string;
+  accountId: string;
+  items: { sku: string; quantity: number }[];
+  timestamp: string;
+}
