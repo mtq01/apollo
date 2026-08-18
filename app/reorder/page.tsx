@@ -6,7 +6,7 @@ import Loader from "@/components/Loader";
 import { CircleAlert, TriangleAlert } from "@/components/icons";
 import EmptyState from "@/components/EmptyState";
 import ErrorMessage from "@/components/ErrorMessage";
-import { ErrorType } from "@/types";
+import { ErrorType, ActivityEvent } from "@/types";
 import { AccountContext } from "@/components/account/AccountContext";
 
 type QuoteRow = {
@@ -18,36 +18,8 @@ type QuoteRow = {
   leadTime: number;
   warehouse: string;
   calculatedAt: string;
+  events: ActivityEvent[];
 };
-
-//Fake activity for noiw
-
-const fakeActivity = [
-  {
-    id: "1",
-    title: "Order Placed",
-    user: "Mike T",
-    po: "123456789",
-    time: "2:04pm",
-    date: "08/03/26",
-  },
-  {
-    id: "2",
-    title: "Quoted SKU-441 at $14.26",
-    user: "Mike T",
-    po: "123456789",
-    time: "2:04pm",
-    date: "08/03/26",
-  },
-  {
-    id: "3",
-    title: "Stock check time out for SKU 44-10, showed cache count",
-    user: "Mike T",
-    po: "123456789",
-    time: "2:04pm",
-    date: "08/03/26",
-  },
-];
 
 export default function Reorder() {
   // Create Loading State, Error State, Text State, and Results State
@@ -58,6 +30,9 @@ export default function Reorder() {
   const [error, setError] = useState<ErrorType | null>(null);
   const [text, setText] = useState("");
   const [results, setResults] = useState<QuoteRow[] | null>(null);
+
+  // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/flatMap
+  const activity = results?.flatMap((row) => row.events) ?? [];
 
   // Function to get quote from the server
   const getQuote = async () => {
@@ -217,7 +192,7 @@ export default function Reorder() {
                                 {new Date(row.calculatedAt).toLocaleTimeString(
                                   [],
                                   {
-                                    hour: "2-digit",
+                                    hour: "numeric",
                                     minute: "2-digit",
                                   },
                                 )}
@@ -253,19 +228,15 @@ export default function Reorder() {
       <aside className="w-md shrink-0 flex flex-col leading-10 tracking-tight text-black bg-white rounded-lg p-6">
         <h2 className="text-3xl font-semibold pb-8">Activities</h2>
         <ol className="flex flex-col gap-12">
-          {fakeActivity.map((activity) => (
-            <li key={activity.id}>
-              <p className="font-semibold text-lg">{activity.title}</p>
-              <div className="flex flex-row gap-4 text-sm text-gray-800 justify-between">
-                <div className="flex flex-col gap-1">
-                  <p>{activity.user}</p>
-                  <p>{activity.time}</p>
-                </div>
-                <div className="flex flex-col gap-1 text-right">
-                  <p>{activity.po}</p>
-                  <p>{activity.date}</p>
-                </div>
-              </div>
+          {activity.map((event) => (
+            <li key={event.id}>
+              <p className="font-semibold text-lg">{event.message}</p>
+              <p className="text-sm text-gray-800">
+                {new Date(event.timestamp).toLocaleTimeString([], {
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}
+              </p>
             </li>
           ))}
         </ol>
