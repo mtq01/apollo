@@ -1,6 +1,8 @@
 import React from "react";
 import styled from "styled-components";
 
+// dot spinner by https://uiverse.io/abrahamcalsin/serious-turkey-52 on UIVERSE
+
 const Loader = () => {
   return (
     <StyledWrapper>
