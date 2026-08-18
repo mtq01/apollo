@@ -3,7 +3,27 @@ import { calculatePrice, seeStock, accessWarehouse } from "./accountRules";
 import { getERPStock } from "./mockERP";
 import { randomUUID } from "crypto";
 
-/* This function combines the 3 functions created in Week 1: 'accountRules.ts' */
+/* This file combines the 3 functions created in Week 1: 'accountRules.ts' */
+
+/* [WHAT] Custom Error for Failed Stock Check
+
+  [HOW] Works like a normal Error, but carries two extra pieces of information:
+    1. events: everything that was already logged before the failure (ex. 'price was calculated') so that work isnt lost.
+    2. cause: the original error that caused the failure, so we know exactly what went wrong.
+
+  [WHY] Without this, if the stock check failed partway through, we would lose track of everything that happened before the failure.
+    - We would also lose the real error too, replacing it with something vague.
+    - This way, nothing gets thrown away when something breaks.
+
+  +++ This pairs with the 'try/catch' below inside the if (canSeeStock) conditional
+*/
+export class StockCheckError extends Error {
+  constructor(message: string, public events: ActivityEvent[], public cause?: unknown) {
+    super(message);
+    this.name = "StockCheckError";
+  }
+}
+
 
 // shape of the final result this function returns
 interface QuoteResult {
@@ -14,7 +34,7 @@ interface QuoteResult {
   leadTime: number;                                                 // days until product ships
   warehouse: string | "hidden";                                     // ship-from warehouse, or "hidden"
   events: ActivityEvent[];                                          // log of what happened while building this quote
-  calculatedAt: string;
+  calculatedAt: string;                                             // when it was calculated
 }
 
 
@@ -28,7 +48,7 @@ export async function getQuoteForProduct({ account, product}: AccountProductPara
   // prevents repeating the same 4-line object everytime we log something
   function addEvent(message: string) {
     events.push({
-      id: crypto.randomUUID(),                                      // creates a unique 36character long v4 UUID - https://developer.mozilla.org/en-US/docs/Web/API/Crypto/randomUUID
+      id: randomUUID(),                                             // creates a unique 36character long v4 UUID - https://developer.mozilla.org/en-US/docs/Web/API/Crypto/randomUUID
       message,                                                      // human-friendly description of what happened
       timestamp: new Date().toISOString(),                          // when it happened
     });
@@ -47,10 +67,15 @@ export async function getQuoteForProduct({ account, product}: AccountProductPara
 
   // +++++ After a successful getERPStock() call, LOG the STOCK. +++++
   if (canSeeStock) {
-    const stockResponse = await getERPStock(product.sku, forceFailure);          // ask the fake ERP for stock (normally random), but throws immediately if forceFailure was passed.
-    stock = stockResponse.stock;                                    // pull the number out of the response
-    stockLastUpdated = stockResponse.lastUpdated;                   // pull the timestamp out too
-    addEvent(`Stock Checked: ${stock} available`);                  // log that the stock check finished
+    // if checking stock fails, catch it & wrap in StockCheckError so we dont lose the events logged so far
+    try {
+      const stockResponse = await getERPStock(product.sku, forceFailure);   // ask the fake ERP for stock (normally random), but throws immediately if forceFailure was passed.
+      stock = stockResponse.stock;                                          // pull the number out of the response
+      stockLastUpdated = stockResponse.lastUpdated;                         // pull the timestamp out too
+      addEvent(`Stock Checked: ${stock} available`);                        // log that the stock check finished
+    } catch (err) {
+        throw new StockCheckError("Stock check failed", events, err);
+    }
   } else {
     // if unsuccessful (false)
     // logs the event instead of staying hidden. (now every quote produces a log entry)
