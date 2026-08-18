@@ -68,7 +68,7 @@ function SelectAccount({ accounts }: { accounts: UserContext[] }) {
         {/* renders one <option> per account. a KEY is required for list rendering */}
         {accounts.map((user) => (
           <option key={user.id} value={user.id}>
-            {user.name} - {user.role} ({user.warehouse})
+            {user.name} - {user.role} ({user.assignedWarehouse})
           </option>
         ))}
       </select>

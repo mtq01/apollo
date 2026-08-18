@@ -51,6 +51,10 @@ export async function getQuoteForProduct({ account, product}: AccountProductPara
     stock = stockResponse.stock;                                    // pull the number out of the response
     stockLastUpdated = stockResponse.lastUpdated;                   // pull the timestamp out too
     addEvent(`Stock Checked: ${stock} available`);                  // log that the stock check finished
+  } else {
+    // if unsuccessful (false)
+    // logs the event instead of staying hidden. (now every quote produces a log entry)
+    addEvent(`Stock Hidden: not visible for this account's role of "${account.role}"`);  
   }
 
 
