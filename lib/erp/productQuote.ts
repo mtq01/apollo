@@ -47,7 +47,7 @@ export async function getQuoteForProduct({ account, product}: AccountProductPara
 
   // +++++ After a successful getERPStock() call, LOG the STOCK. +++++
   if (canSeeStock) {
-    const stockResponse = await getERPStock(forceFailure);          // ask the fake ERP for stock (normally random), but throws immediately if forceFailure was passed.
+    const stockResponse = await getERPStock(product.sku, forceFailure);          // ask the fake ERP for stock (normally random), but throws immediately if forceFailure was passed.
     stock = stockResponse.stock;                                    // pull the number out of the response
     stockLastUpdated = stockResponse.lastUpdated;                   // pull the timestamp out too
     addEvent(`Stock Checked: ${stock} available`);                  // log that the stock check finished

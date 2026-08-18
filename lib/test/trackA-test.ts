@@ -1,0 +1,26 @@
+import { addOrder, getOrderHistory } from "../order/order"; 
+import { getERPStock } from "../erp/mockERP";
+
+async function main() {
+  // Confirm the same sku returns the same stock number every time
+  const a = await getERPStock("SKU-1001");
+  const b = await getERPStock("SKU-1001");
+  console.log("Same SKU, two calls:", a.stock, b.stock, a.stock === b.stock ? "✅ matches" : "❌ different");
+
+  // Confirm getOrderHistory filters correctly
+  const mikesOrders = await getOrderHistory(3);
+  console.log("Mike's orders:", mikesOrders);
+
+  // Confirm addOrder appends without wiping existing data
+  const before = (await getOrderHistory(3)).length;
+  await addOrder({
+    id: crypto.randomUUID(),
+    accountId: 3,
+    items: [{ sku: "SKU-1007", quantity: 1 }],
+    timestamp: new Date().toISOString(),
+  });
+  const after = (await getOrderHistory(3)).length;
+  console.log("Order count for Mike, before → after:", before, "→", after);
+}
+
+main();

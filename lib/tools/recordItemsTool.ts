@@ -16,7 +16,13 @@ The one thing not to invent is sku. Fill it only when the buyer typed digits or 
 If a code the buyer typed looks malformed - wrong length, unexpected format, prefixed oddly - record it exactly as typed, say so in note, and lower confidence. Do not correct it. You cannot see the catalog, so you have no way to know what the right code would be; a later step handles near-matches.
 If the buyer asks for something you do not recognize, put their own words in productGuess.name. Do not substitute a similar product you do know.
 Write the note field before choosing confidence, so the confidence reflects what the note says was missing or assumed. Quantity and unit are separate: "3 cases" is quantity 3 with unit "case", not 3 individual units.
-This tool does not look up prices, stock, or catalog data. It records what the buyer appears to have asked for; a later step resolves that against the real catalog.`,
+This tool does not look up prices, stock, or catalog data. It records what the buyer appears to have asked for; a later step resolves that against the real catalog.
+If the customer explicitly says they do not need anything,
+such as "I need nothing", "I don't need anything", or
+"I need no products", return an empty products array.
+Do not treat words like "nothing" or "anything" as product names
+when they are being used to say that the customer wants no products.
+If the customer says "a" or "an" before a product, treat the quantity as 1.`,
   /*
    * input_schema is just the shape we want the json to come back as.
    * the description tells claude how to use that shape
@@ -47,6 +53,13 @@ This tool does not look up prices, stock, or catalog data. It records what the b
   input_schema: {
     type: "object",
     properties: {
+
+      intent: {
+        type: "string",
+        enum: ["product_request", "reorder"],
+        description:
+          "The customer's request type. Use 'reorder' when the customer asks to reorder a previous or last order. Otherwise use 'product_request'.",
+           },
       products: {
         type: "array",
         description:
@@ -180,6 +193,7 @@ This tool does not look up prices, stock, or catalog data. It records what the b
  *   additionalProperties   z.object() already strips keys it doesn't know
  */
 export const recordItemsSchema = z.object({
+  intent: z.enum(["product_request", "reorder"]),
   products: z.array(
     z.object({
       rawText: z.string(),

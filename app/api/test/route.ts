@@ -21,7 +21,7 @@ export async function POST() {
       messages: [
         {
           role: "user",
-          content: "I need 2 mechanical keyboards and 1 wireless mouse", // We need to connect this part to the UI. right now is hard coded for testing.
+          content: "I need a keyboard and 2 mouses", // We need to connect this part to the UI. right now is hard coded for testing.
         },
       ],
     });
@@ -89,8 +89,16 @@ export async function POST() {
     // result.data is now the parsed customer request
     const parsedItems = result.data;
 
-    // This acoount is temporary. Eventually, the account would probably come from our login/session rather than being written directly in the route.
+    // If Claude didn't find any products (There is nothing to look up, so the for loop doesn't even need to run.)
+    if (parsedItems.products.length === 0) {
+      return Response.json({
+        parsed: parsedItems,
+        results: [],
+        message: "No products were requested.",
+      });
+    }
 
+    // This acoount is temporary. Eventually, the account would probably come from our login/session rather than being written directly in the route.
     const mahtab = {
       id: 2,
       name: "Mahtab",
@@ -121,24 +129,31 @@ export async function POST() {
       }
 
       // Run pricing / stock / warehouse logic
-      const quote = await getQuoteForProduct({
-        account: mahtab,
-        product,
-      });
+      try {
+        const quote = await getQuoteForProduct({
+          account: mahtab,
+          product,
+        });
 
-      results.push({
-        requestedItem: item.rawText,
-        quantity: item.quantity,
-        ...quote, // ...quote copies the properties from quote into the new object.
-      });
+        results.push({
+          requestedItem: item.rawText,
+          quantity: item.quantity,
+          ...quote, // ...quote copies the properties from quote into the new object.
+        });
+      } catch (error) {
+        console.log("Quote failed:", error);
+        results.push({
+          requestedItem: item.rawText,
+          quantity: item.quantity,
+          error: "Unable to get quote",
+        });
+      }
     }
-
     // return everything
     return Response.json({
       parsed: parsedItems,
       results,
     });
-
     // return Response.json({ output: result.data });
   } catch (error) {
     // https://platform.claude.com/docs/en/cli-sdks-libraries/sdks/typescript#handling-errors
