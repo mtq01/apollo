@@ -1,12 +1,13 @@
 // reorder page
 "use client";
 
-import { useState } from "react";
+import { useContext, useState } from "react";
 import Loader from "@/components/Loader";
 import { CircleAlert, TriangleAlert } from "@/components/icons";
 import EmptyState from "@/components/EmptyState";
 import ErrorMessage from "@/components/ErrorMessage";
 import { ErrorType } from "@/types";
+import { AccountContext } from "@/components/account/AccountContext";
 
 type QuoteRow = {
   sku: string;
@@ -16,6 +17,7 @@ type QuoteRow = {
   stock: "hidden" | number | ErrorType;
   leadTime: number;
   warehouse: string;
+  calculatedAt: string;
 };
 
 //Fake activity for noiw
@@ -49,6 +51,9 @@ const fakeActivity = [
 
 export default function Reorder() {
   // Create Loading State, Error State, Text State, and Results State
+
+  //get the accountId from the context
+  const { accountId } = useContext(AccountContext);
   const [isLoading, setLoading] = useState(false);
   const [error, setError] = useState<ErrorType | null>(null);
   const [text, setText] = useState("");
@@ -59,15 +64,25 @@ export default function Reorder() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch("/api/quote", { method: "POST" });
+      const response = await fetch("/api/quote", {
+        method: "POST",
+        body: JSON.stringify({ text, accountId }),
+      });
 
       if (!response.ok) {
-        console.error(`Request failed (${response.status})`);
-        //setting generic error message in front end if failed
-        setError({
+        const fallback: ErrorType = {
           type: "request failed",
           message: "Couldn't get a quote. Please try again later.",
-        });
+        };
+
+        try {
+          const errData = await response.json();
+
+          setError(errData.error ? errData.error : fallback);
+        } catch {
+          setError(fallback);
+        }
+
         return;
       }
 
@@ -194,7 +209,21 @@ export default function Reorder() {
                               Is it the word "hidden"? This account isn't allowed to see it.
                               Anything left over has to be an error. } */}
                         {typeof row.stock === "number" ? (
-                          row.stock
+                          <>
+                            {row.stock}
+                            {row.calculatedAt && (
+                              <div className="text-xs text-gray-600">
+                                as of{" "}
+                                {new Date(row.calculatedAt).toLocaleTimeString(
+                                  [],
+                                  {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  },
+                                )}
+                              </div>
+                            )}
+                          </>
                         ) : row.stock === "hidden" ? (
                           "—"
                         ) : (

@@ -61,31 +61,30 @@ export async function POST() {
       );
     }
 
-//explain everything in plain English
+    //explain everything in plain English
 
-// 1. Get Claude's validated JSON.
-//           
-// 2. Pretend the customer is Mahtab.
-//           
-// 3. Create an empty results array.
-//           
-// 4. Take each item Claude found.
-//           
-// 5. Look for that item in catalog.json.
-//           
-// 6. If it doesn't exist:
-//        save "Product not found"
-//        move to the next item.
-//           
-// 7. If it exists:
-//        send account + product
-//        to getQuoteForProduct().
-//           
-// 8. Add the quote to results.
-//           
-// 9. After ALL items are processed,
-//        return parsed data + results.
-
+    // 1. Get Claude's validated JSON.
+    //
+    // 2. Pretend the customer is Mahtab.
+    //
+    // 3. Create an empty results array.
+    //
+    // 4. Take each item Claude found.
+    //
+    // 5. Look for that item in catalog.json.
+    //
+    // 6. If it doesn't exist:
+    //        save "Product not found"
+    //        move to the next item.
+    //
+    // 7. If it exists:
+    //        send account + product
+    //        to getQuoteForProduct().
+    //
+    // 8. Add the quote to results.
+    //
+    // 9. After ALL items are processed,
+    //        return parsed data + results.
 
     // result.data is now the parsed customer request
     const parsedItems = result.data;
@@ -100,7 +99,7 @@ export async function POST() {
       assignedWarehouse: "Toronto",
     };
 
-// We're going to put the final result for each requested product inside this array. for example: results = [keyboard result, mouse result]
+    // We're going to put the final result for each requested product inside this array. for example: results = [keyboard result, mouse result]
     const results = [];
 
     for (const item of parsedItems.products) {
@@ -139,7 +138,6 @@ export async function POST() {
       parsed: parsedItems,
       results,
     });
-
 
     // return Response.json({ output: result.data });
   } catch (error) {

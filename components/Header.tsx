@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useContext } from "react";
 import { accountList } from "@/components/account/AccountSelector";
 import { CircleUserRound } from "@/components/icons";
+import { AccountContext } from "./account/AccountContext";
+//https://react.dev/learn/passing-data-deeply-with-context#step-2-use-the-context
 
 const Header = () => {
-  const [accountId, setAccountId] = useState<number | null>(null);
+  const { accountId, setAccountId } = useContext(AccountContext);
   const account = accountList.find((a) => a.id === accountId);
   return (
     <header className="flex h-topbar flex-col items-center justify-center gap-4 bg-apollo-light px-4 sm:flex-row text-black sm:justify-end sm:px-16 border-b border-zinc-200">

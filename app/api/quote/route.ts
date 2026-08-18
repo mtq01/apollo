@@ -31,7 +31,14 @@ async function getCachedQuote(account: UserContext, product: Product) {
 //Will Need to send to post later down the line once the claude and finder logic is in place. for now, jsut grab the whole catalogue
 export async function POST(request: Request) {
   // For now, Just grab an account 1-3 to test the quote system
-  const account = (accounts as UserContext[]).find((a) => a.id === 1)!;
+  const { text, accountId } = await request.json();
+  const account = (accounts as UserContext[]).find((a) => a.id === accountId);
+  if (!account) {
+    return Response.json(
+      { error: { type: "request failed", message: "Please Log In" } },
+      { status: 400 },
+    );
+  }
 
   const quotes = [];
   // Each time round, the loop body is a fresh scope, so `const product` isn't being reassigned.
