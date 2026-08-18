@@ -108,7 +108,7 @@ export default function Reorder() {
             <span className="sr-only">Paste your order</span>
             <textarea
               placeholder="paste SKU's, an invoice or a list of products here"
-              className="border w-full border-gray-300 p-2 min-h-[150px] rounded-xl focus:outline-none focus:ring-2 focus:ring-grey-500"
+              className="border w-full border-gray-300 p-2 min-h-37.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-grey-500"
               value={text}
               onChange={handleChange}
             />
