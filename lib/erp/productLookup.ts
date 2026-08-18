@@ -16,11 +16,17 @@ export function lookupProduct({
 
   // If there is no SKU, try to find the product by name
   if (productName) {
-    return catalog.find(
-      (product) =>
-        product.name.toLowerCase() === productName.toLowerCase()
-    );
-  }
+  const searchName = productName.toLowerCase().trim().replace(/s$/, "");
 
-  return undefined;
+  return catalog.find((product) => {
+    const catalogName = product.name.toLowerCase().replace(/s$/, "");
+
+    return (
+      catalogName.includes(searchName) ||
+      searchName.includes(catalogName)
+    );
+  });
+}
+
+return undefined;
 }
