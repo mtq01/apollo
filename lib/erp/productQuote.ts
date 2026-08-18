@@ -3,9 +3,10 @@ import { calculatePrice, seeStock, accessWarehouse } from "./accountRules";
 import { getERPStock } from "./mockERP";
 import { randomUUID } from "crypto";
 
-/* This file combines the 3 functions created in Week 1: 'accountRules.ts' */
+// +++++ This file combines the 3 functions created in Week 1: 'accountRules.ts' +++++
 
-/* [WHAT] Custom Error for Failed Stock Check
+/* StockCheckError
+  [WHAT] Custom Error for Failed Stock Check
 
   [HOW] Works like a normal Error, but carries two extra pieces of information:
     1. events: everything that was already logged before the failure (ex. 'price was calculated') so that work isnt lost.
@@ -67,21 +68,39 @@ export async function getQuoteForProduct({ account, product}: AccountProductPara
 
   // +++++ After a successful getERPStock() call, LOG the STOCK. +++++
   if (canSeeStock) {
-    // if checking stock fails, catch it & wrap in StockCheckError so we dont lose the events logged so far
-    try {
-      const stockResponse = await getERPStock(product.sku, forceFailure);   // ask the fake ERP for stock (normally random), but throws immediately if forceFailure was passed.
-      stock = stockResponse.stock;                                          // pull the number out of the response
-      stockLastUpdated = stockResponse.lastUpdated;                         // pull the timestamp out too
-      addEvent(`Stock Checked: ${stock} available`);                        // log that the stock check finished
-    } catch (err) {
-        throw new StockCheckError("Stock check failed", events, err);
-    }
-  } else {
-    // if unsuccessful (false)
-    // logs the event instead of staying hidden. (now every quote produces a log entry)
-    addEvent(`Stock Hidden: not visible for this account's role of "${account.role}"`);  
-  }
 
+    // +++++ Retry up to 2 times before giving up +++++
+    const maxAttempts = 2;                                          // 1 try & 1 retry
+    let lastError: unknown = undefined;                             // holds the most recent failure in case we need to throw it later
+    let succeeded = false;                                          // flips to true once a stock check actually works
+
+    
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      // if checking stock fails, catch it & wrap in StockCheckError so we dont lose the events logged so far
+      try {
+        const stockResponse = await getERPStock(product.sku, forceFailure);   // ask the fake ERP for stock (normally random), but throws immediately if forceFailure was passed.
+        stock = stockResponse.stock;                                          // pull the number out of the response
+        stockLastUpdated = stockResponse.lastUpdated;                         // pull the timestamp out too
+        addEvent(`Stock Checked: ${stock} available`);                        // log that the stock check finished
+        succeeded = true;                                                     // mark success so we know not to retry
+        break;                                                                // it worked, stop trying.
+    } catch (err) {
+      lastError = err;                                                        // save it, but dont throw yet, let the loop try again.
+      addEvent(`Stock check attempt ${attempt} failed`);                      // log the failed attempt so its not silent
+    }
+  } 
+   
+  /* +++++ If every attempt failed, give up and throw this +++++
+  - it only reaches this if the loop above finished without ever returning true. */
+  if (!succeeded) {
+    throw new StockCheckError("Stock check failed", events, lastError);       // carries the events plus real error along with it
+    }   
+  } else {
+      // if unsuccessful (false)
+      // logs the event instead of staying hidden. (now every quote produces a log entry)
+      addEvent(`Stock Hidden: not visible for this account's role of "${account.role}"`);  
+    }
+  
 
   /* +++++ Record when this quote was ACTUALLY calculated +++++
     - Save the exact time this quote was put together.
