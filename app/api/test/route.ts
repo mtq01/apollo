@@ -61,43 +61,42 @@ export async function POST() {
       );
     }
 
-//explain everything in plain English
+    //explain everything in plain English
 
-// 1. Get Claude's validated JSON.
-//           
-// 2. Pretend the customer is Mahtab.
-//           
-// 3. Create an empty results array.
-//           
-// 4. Take each item Claude found.
-//           
-// 5. Look for that item in catalog.json.
-//           
-// 6. If it doesn't exist:
-//        save "Product not found"
-//        move to the next item.
-//           
-// 7. If it exists:
-//        send account + product
-//        to getQuoteForProduct().
-//           
-// 8. Add the quote to results.
-//           
-// 9. After ALL items are processed,
-//        return parsed data + results.
-
+    // 1. Get Claude's validated JSON.
+    //
+    // 2. Pretend the customer is Mahtab.
+    //
+    // 3. Create an empty results array.
+    //
+    // 4. Take each item Claude found.
+    //
+    // 5. Look for that item in catalog.json.
+    //
+    // 6. If it doesn't exist:
+    //        save "Product not found"
+    //        move to the next item.
+    //
+    // 7. If it exists:
+    //        send account + product
+    //        to getQuoteForProduct().
+    //
+    // 8. Add the quote to results.
+    //
+    // 9. After ALL items are processed,
+    //        return parsed data + results.
 
     // result.data is now the parsed customer request
     const parsedItems = result.data;
 
-   // If Claude didn't find any products (There is nothing to look up, so the for loop doesn't even need to run.)
-if (parsedItems.products.length === 0) {
-  return Response.json({
-    parsed: parsedItems,
-    results: [],
-    message: "No products were requested.",
-  });
-}
+    // If Claude didn't find any products (There is nothing to look up, so the for loop doesn't even need to run.)
+    if (parsedItems.products.length === 0) {
+      return Response.json({
+        parsed: parsedItems,
+        results: [],
+        message: "No products were requested.",
+      });
+    }
 
     // This acoount is temporary. Eventually, the account would probably come from our login/session rather than being written directly in the route.
     const mahtab = {
@@ -108,7 +107,7 @@ if (parsedItems.products.length === 0) {
       assignedWarehouse: "Toronto",
     };
 
-// We're going to put the final result for each requested product inside this array. for example: results = [keyboard result, mouse result]
+    // We're going to put the final result for each requested product inside this array. for example: results = [keyboard result, mouse result]
     const results = [];
 
     for (const item of parsedItems.products) {
@@ -130,26 +129,26 @@ if (parsedItems.products.length === 0) {
       }
 
       // Run pricing / stock / warehouse logic
-      try{
-      const quote = await getQuoteForProduct({
-        account: mahtab,
-        product,
-      });
+      try {
+        const quote = await getQuoteForProduct({
+          account: mahtab,
+          product,
+        });
 
-      results.push({
-        requestedItem: item.rawText,
-        quantity: item.quantity,
-        ...quote, // ...quote copies the properties from quote into the new object.
-      });
-    }
-catch(error){
-console.log("Quote failed:", error);
-results.push({
+        results.push({
+          requestedItem: item.rawText,
+          quantity: item.quantity,
+          ...quote, // ...quote copies the properties from quote into the new object.
+        });
+      } catch (error) {
+        console.log("Quote failed:", error);
+        results.push({
           requestedItem: item.rawText,
           quantity: item.quantity,
           error: "Unable to get quote",
-});
-  }}
+        });
+      }
+    }
     // return everything
     return Response.json({
       parsed: parsedItems,

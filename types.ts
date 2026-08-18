@@ -23,8 +23,6 @@ Type -> Can be used for objects, primitive aliases, unions, tuples
 - A tuple is like an array, but: it has a fixed length and each position has a specific type.  type ProductInfo = [string, number];
 ----------------------------------------------------------------------------------------------------------------------------------- */
 
-
-
 /* The 3 possible roles an account can have. Controls what stock/warehouse
 info an account is allowed to see (see seeStock, accessWarehouse). */
 export type Role = "buyer" | "manager" | "admin";
@@ -38,18 +36,17 @@ export interface UserContext {
   name: string;
   role: Role;
   accountType: AccountType;
-  assignedWarehouse: string;          // which warehouse this account is assigned too, for shipping/inventory checks.
+  assignedWarehouse: string; // which warehouse this account is assigned too, for shipping/inventory checks.
 }
 
 // One product from the catalog. This is static, unchanging data. Real-time info like stock comes from getERPStock instead, not from here.
 export interface Product {
   sku: string;
   name: string;
-  basePrice: number;          // price before any account-based discount
-  leadTime: number;           // days until this product ships
-  warehouse: string;          // which warehouse this product ships from
+  basePrice: number; // price before any account-based discount
+  leadTime: number; // days until this product ships
+  warehouse: string; // which warehouse this product ships from
 }
-
 
 /* Describes an error that already happened, with a human-readable message.
 Used for general app-wide errors (not the same as ForcedFailure below, which is for 
@@ -73,6 +70,10 @@ export type ErrorType =
   | {
       type: "invalid input";
       message: string;
+    }
+  | {
+      type: "request failed";
+      message: string;
     };
 
 /* Shared input shape for any function that needs both an account and a product 
@@ -93,8 +94,6 @@ export interface ActivityEvent {
 /* The specific failures getERPStock can be forced to throw on demand, for testing and demoing. 
 Bypasses the normal random delay/chance. */
 export type ForcedFailure = "timeout" | "not found";
-
-
 
 export interface Order {
   id: string;

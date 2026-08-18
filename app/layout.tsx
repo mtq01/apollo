@@ -4,6 +4,7 @@ import "./globals.css";
 import Nav from "@/components/Nav";
 import { Roboto } from "next/font/google";
 import Header from "@/components/Header";
+import { AccountProvider } from "@/components/account/AccountProvider";
 
 // fonts
 const geistSans = Geist({
@@ -39,11 +40,13 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} ${roboto.variable} h-full antialiased`}
     >
       <body className="flex flex-row">
-        <Nav />
-        <div className="min-h-dvh flex flex-col flex-1 min-w-0">
-          <Header />
-          <main className="flex-1">{children}</main>
-        </div>
+        <AccountProvider>
+          <Nav />
+          <div className="min-h-dvh flex flex-col flex-1 min-w-0">
+            <Header />
+            <main className="flex-1">{children}</main>
+          </div>
+        </AccountProvider>
       </body>
     </html>
   );

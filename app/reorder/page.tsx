@@ -1,65 +1,89 @@
 // reorder page
 "use client";
 
-import { useState } from "react";
+import { useContext, useState } from "react";
+import Loader from "@/components/Loader";
+import { CircleAlert, TriangleAlert } from "@/components/icons";
+import EmptyState from "@/components/EmptyState";
+import ErrorMessage from "@/components/ErrorMessage";
+import { ErrorType, ActivityEvent } from "@/types";
+import { AccountContext } from "@/components/account/AccountContext";
 
 type QuoteRow = {
   sku: string;
   name: string;
   qty: number;
   price: number;
-  stock: string | number;
+  stock: "hidden" | number | ErrorType;
   leadTime: number;
   warehouse: string;
+  calculatedAt: string;
+  events: ActivityEvent[];
 };
-// I Created new fake results because the ones in the json didnt have stock
-
-const fakeActivity = [
-  {
-    id: "1",
-    title: "Order Placed",
-    user: "Mike T",
-    po: "123456789",
-    time: "2:04pm",
-    date: "08/03/26",
-  },
-  {
-    id: "2",
-    title: "Quoted SKU-441 at $14.26",
-    user: "Mike T",
-    po: "123456789",
-    time: "2:04pm",
-    date: "08/03/26",
-  },
-  {
-    id: "3",
-    title: "Stock check time out for SKU 44-10, showed cache count",
-    user: "Mike T",
-    po: "123456789",
-    time: "2:04pm",
-    date: "08/03/26",
-  },
-];
 
 export default function Reorder() {
-  const [text, setText] = useState("");
-  const [results, setResults] = useState<QuoteRow[]>([]);
+  // Create Loading State, Error State, Text State, and Results State
 
+  //get the accountId from the context
+  const { accountId } = useContext(AccountContext);
+  const [isLoading, setLoading] = useState(false);
+  const [error, setError] = useState<ErrorType | null>(null);
+  const [text, setText] = useState("");
+  const [results, setResults] = useState<QuoteRow[] | null>(null);
+
+  // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/flatMap
+  const activity = results?.flatMap((row) => row.events) ?? [];
+
+  // Function to get quote from the server
   const getQuote = async () => {
+    setLoading(true);
+    setError(null);
     try {
-      const response = await fetch("/api/quote", { method: "POST" });
+      const response = await fetch("/api/quote", {
+        method: "POST",
+        body: JSON.stringify({ text, accountId }),
+      });
 
       if (!response.ok) {
-        console.error(`Request failed (${response.status})`);
+        const fallback: ErrorType = {
+          type: "request failed",
+          message: "Couldn't get a quote. Please try again later.",
+        };
+
+        try {
+          const errData = await response.json();
+
+          setError(errData.error ? errData.error : fallback);
+        } catch {
+          setError(fallback);
+        }
+
         return;
       }
 
       const data = await response.json();
       setResults(data);
     } catch (error) {
-      console.error("Something went wrong:", error);
+      setError({
+        type: "request failed",
+        message: "Couldn't reach the server. Check your connection.",
+      });
+    } finally {
+      setLoading(false);
     }
   };
+  /* Say you type "SKU".
+    You press S:
+  
+    function runs, e.target.value is "S"
+    You press K:
+
+    function runs, e.target.value is "SK"
+    setText("SK")
+     You press U:
+
+     function runs, e.target.value is "SKU"
+    setText("SKU") */
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setText(e.target.value);
@@ -91,31 +115,40 @@ export default function Reorder() {
           </label>
           <button
             type="submit"
-            disabled={!text.trim()}
-            className="self-start rounded-lg bg-black px-4 py-2 text-apollo-light hover:bg-zinc-800 "
+            disabled={!text.trim() || isLoading}
+            className="self-start rounded-lg bg-black px-4 py-2 text-apollo-light hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Get quote
           </button>
         </form>
+        {isLoading ? (
+          <div className="flex w-full flex-col items-center gap-4 py-16">
+            <Loader />
 
-        {results.length > 0 && (
+            <p className="text-lg">Getting quote...</p>
+          </div>
+        ) : error ? (
+          <ErrorMessage error={error} />
+        ) : results === null ? (
+          <div className=" w-xl text-center mx-auto  py-16">
+            <EmptyState
+              title="Paste your order to get a quote"
+              message=" We'll work out what you meant and
+              show you prices, stock and delivery times."
+            />
+          </div>
+        ) : results.length === 0 ? (
+          <EmptyState
+            title="No matching products found."
+            message="Try a different search or check your input."
+          />
+        ) : (
           <>
             <div
               role="status"
               className="flex w-full items-center gap-3 rounded-lg bg-orange-200 px-4 py-3 text-sm text-black mb-2"
             >
-              <svg
-                viewBox="0 0 20 20"
-                fill="currentColor"
-                aria-hidden="true"
-                className="size-5 shrink-0"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                  clipRule="evenodd"
-                />
-              </svg>
+              <TriangleAlert aria-hidden="true" className="size-5" />
               <p>
                 Stock data may be a few hours old for SKU-4410. Confirm before
                 ordering.
@@ -130,6 +163,7 @@ export default function Reorder() {
                     <th>Name</th>
                     <th className="w-20">Qty</th>
                     <th className="w-28">Price</th>
+
                     <th className="w-44">Stock</th>
                     <th className="w-32">Lead time</th>
                     <th className="w-40">Warehouse</th>
@@ -144,13 +178,45 @@ export default function Reorder() {
                       <td>
                         {row.price != null ? `$${row.price.toFixed(2)}` : "—"}
                       </td>
-                      <td>{row.stock ?? "—"}</td>
+                      <td>
+                        {/* { Stock can be one of three things, so we check them in order.
+                              Is it a number? Show the count.
+                              Is it the word "hidden"? This account isn't allowed to see it.
+                              Anything left over has to be an error. } */}
+                        {typeof row.stock === "number" ? (
+                          <>
+                            {row.stock}
+                            {row.calculatedAt && (
+                              <div className="text-xs text-gray-600">
+                                as of{" "}
+                                {new Date(row.calculatedAt).toLocaleTimeString(
+                                  [],
+                                  {
+                                    hour: "numeric",
+                                    minute: "2-digit",
+                                  },
+                                )}
+                              </div>
+                            )}
+                          </>
+                        ) : row.stock === "hidden" ? (
+                          "—"
+                        ) : (
+                          <span className="text-red-900">
+                            {row.stock.message}
+                          </span>
+                        )}
+                      </td>
                       <td>
                         {row.leadTime != null
                           ? `${row.leadTime} ${row.leadTime === 1 ? "day" : "days"}`
                           : "—"}
                       </td>
-                      <td>{row.warehouse ?? "—"}</td>
+                      <td>
+                        {row.warehouse === "hidden"
+                          ? "Restricted"
+                          : row.warehouse}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -162,19 +228,15 @@ export default function Reorder() {
       <aside className="w-md shrink-0 flex flex-col leading-10 tracking-tight text-black bg-white rounded-lg p-6">
         <h2 className="text-3xl font-semibold pb-8">Activities</h2>
         <ol className="flex flex-col gap-12">
-          {fakeActivity.map((activity) => (
-            <li key={activity.id}>
-              <p className="font-semibold text-lg">{activity.title}</p>
-              <div className="flex flex-row gap-4 text-sm text-gray-800 justify-between">
-                <div className="flex flex-col gap-1">
-                  <p>{activity.user}</p>
-                  <p>{activity.time}</p>
-                </div>
-                <div className="flex flex-col gap-1 text-right">
-                  <p>{activity.po}</p>
-                  <p>{activity.date}</p>
-                </div>
-              </div>
+          {activity.map((event) => (
+            <li key={event.id}>
+              <p className="font-semibold text-lg">{event.message}</p>
+              <p className="text-sm text-gray-800">
+                {new Date(event.timestamp).toLocaleTimeString([], {
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}
+              </p>
             </li>
           ))}
         </ol>
