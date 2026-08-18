@@ -13,7 +13,7 @@ type QuoteRow = {
   name: string;
   qty: number;
   price: number;
-  stock: string | number;
+  stock: "hidden" | number | ErrorType;
   leadTime: number;
   warehouse: string;
 };
@@ -74,7 +74,10 @@ export default function Reorder() {
       const data = await response.json();
       setResults(data);
     } catch (error) {
-      console.error("Something went wrong:", error);
+      setError({
+        type: "request failed",
+        message: "Couldn't reach the server. Check your connection.",
+      });
     } finally {
       setLoading(false);
     }
@@ -135,15 +138,20 @@ export default function Reorder() {
             <p className="text-lg">Getting quote...</p>
           </div>
         ) : error ? (
-          <div
-            role="alert"
-            className="flex w-full items-center gap-3 rounded-lg bg-red-200 px-4 py-3 text-sm text-red-900"
-          >
-            <CircleAlert aria-hidden="true" className="size-5" />
-            <p>{error}</p>
+          <ErrorMessage error={error} />
+        ) : results === null ? (
+          <div className=" w-xl text-center mx-auto  py-16">
+            <EmptyState
+              title="Paste your order to get a quote"
+              message=" We'll work out what you meant and
+              show you prices, stock and delivery times."
+            />
           </div>
-        ) : results === null ? null : results.length === 0 ? (
-          <EmptyState message="No matching products found." />
+        ) : results.length === 0 ? (
+          <EmptyState
+            title="No matching products found."
+            message="Try a different search or check your input."
+          />
         ) : (
           <>
             <div
@@ -165,6 +173,7 @@ export default function Reorder() {
                     <th>Name</th>
                     <th className="w-20">Qty</th>
                     <th className="w-28">Price</th>
+
                     <th className="w-44">Stock</th>
                     <th className="w-32">Lead time</th>
                     <th className="w-40">Warehouse</th>
@@ -179,13 +188,31 @@ export default function Reorder() {
                       <td>
                         {row.price != null ? `$${row.price.toFixed(2)}` : "—"}
                       </td>
-                      <td>{row.stock ?? "—"}</td>
+                      <td>
+                        {/* { Stock can be one of three things, so we check them in order.
+                              Is it a number? Show the count.
+                              Is it the word "hidden"? This account isn't allowed to see it.
+                              Anything left over has to be an error. } */}
+                        {typeof row.stock === "number" ? (
+                          row.stock
+                        ) : row.stock === "hidden" ? (
+                          "—"
+                        ) : (
+                          <span className="text-red-900">
+                            {row.stock.message}
+                          </span>
+                        )}
+                      </td>
                       <td>
                         {row.leadTime != null
                           ? `${row.leadTime} ${row.leadTime === 1 ? "day" : "days"}`
                           : "—"}
                       </td>
-                      <td>{row.warehouse ?? "—"}</td>
+                      <td>
+                        {row.warehouse === "hidden"
+                          ? "Restricted"
+                          : row.warehouse}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
