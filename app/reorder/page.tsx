@@ -6,19 +6,19 @@ import Loader from "@/components/Loader";
 import { CircleAlert, TriangleAlert } from "@/components/icons";
 import EmptyState from "@/components/EmptyState";
 import ErrorMessage from "@/components/ErrorMessage";
-import { ErrorType, ActivityEvent } from "@/types";
+import { ErrorType, ActivityEvent, ForcedFailure } from "@/types";
 import { AccountContext } from "@/components/account/AccountContext";
 
 type QuoteRow = {
-  sku: string;
   name: string;
-  quantity: number;
-  price: number;
+  quantity: number | null;
   stock: "hidden" | number | ErrorType;
-  leadTime: number;
-  warehouse: string;
-  calculatedAt: string;
-  events: ActivityEvent[];
+  sku?: string;
+  price?: number;
+  leadTime?: number;
+  warehouse?: string;
+  calculatedAt?: string;
+  events?: ActivityEvent[];
 };
 
 export default function Reorder() {
@@ -30,9 +30,10 @@ export default function Reorder() {
   const [error, setError] = useState<ErrorType | null>(null);
   const [text, setText] = useState("");
   const [results, setResults] = useState<QuoteRow[] | null>(null);
+  const [forceFailure, setForceFailure] = useState<ForcedFailure | null>(null);
 
   // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/flatMap
-  const activity = results?.flatMap((row) => row.events) ?? [];
+  const activity = results?.flatMap((row) => row.events ?? []) ?? [];
 
   // Function to get quote from the server
   const getQuote = async () => {
@@ -41,7 +42,11 @@ export default function Reorder() {
     try {
       const response = await fetch("/api/quote", {
         method: "POST",
-        body: JSON.stringify({ text, accountId }),
+        body: JSON.stringify({
+          text,
+          accountId,
+          forceFailure: forceFailure ?? undefined,
+        }),
       });
 
       if (!response.ok) {
@@ -121,6 +126,16 @@ export default function Reorder() {
             Get quote
           </button>
         </form>
+        <select
+          value={forceFailure ?? ""}
+          onChange={(e) =>
+            setForceFailure((e.target.value || null) as ForcedFailure | null)
+          }
+        >
+          <option value="">No forced failure</option>
+          <option value="timeout">Force timeout</option>
+          <option value="not found">Force not found</option>
+        </select>
         {isLoading ? (
           <div className="flex w-full flex-col items-center gap-4 py-16">
             <Loader />
@@ -170,8 +185,8 @@ export default function Reorder() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-200">
-                  {results.map((row) => (
-                    <tr key={row.sku}>
+                  {results.map((row, index) => (
+                    <tr key={index}>
                       <td>{row.sku}</td>
                       <td>{row.name ?? "—"}</td>
                       <td>{row.quantity ?? "—"}</td>

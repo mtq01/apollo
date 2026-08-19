@@ -1,7 +1,7 @@
 /* quote route ping test :*/
 import accounts from "@/data/accounts.json";
-import { getQuoteForProduct } from "@/lib/erp/productQuote";
-import type { Product, UserContext, ErrorType } from "@/types";
+import { getQuoteForProduct, StockCheckError } from "@/lib/erp/productQuote";
+import type { Product, UserContext, ErrorType, ForcedFailure } from "@/types";
 import { cacheTag } from "next/cache";
 import { accessWarehouse, calculatePrice } from "@/lib/erp/accountRules";
 import { parseOrder } from "@/lib/agent/parseOrder";
@@ -17,10 +17,16 @@ const userRequest = z.object({
     .number("The account id is not a number or null")
     .int("The account id must be a whole number")
     .positive("the account id must be a positive number"),
+  // the value must be exactly one of these strings, nothing else. z.enum() is for strings only
+  forceFailure: z.enum(["timeout", "not found"]).optional(),
   //These error messages are for us, the User will just receive a generic  "Please log in" message.
 });
 
-async function getCachedQuote(account: UserContext, product: Product) {
+async function getCachedQuote(
+  account: UserContext,
+  product: Product,
+  forceFailure?: ForcedFailure,
+) {
   /*
 [Caching]
     - What it does: do the call once, save the answer, and have the saved results
@@ -39,7 +45,7 @@ async function getCachedQuote(account: UserContext, product: Product) {
   "use cache";
   cacheTag("stock");
   // here it checks if the quote is stored in the chache, if it is, it returns the saved andswer, if not it runs like normal
-  return getQuoteForProduct({ account, product });
+  return getQuoteForProduct({ account, product }, forceFailure);
 }
 
 //Will Need to send to post later down the line once the claude and finder logic is in place. for now, jsut grab the whole catalogue
@@ -63,6 +69,11 @@ export async function POST(request: Request) {
   proper error message to the user. */
   /* z.flattenError() takes the zod error object and flattens it into a more usable format. Normally it is quite convoluted */
   const validated = userRequest.safeParse(body);
+  /* safeparse returns this object: 
+  { { success: true;  data: { text: string; accountId: number; forceFailure?: ... } }
+{ success: false; error: ZodError }
+ */
+
   if (!validated.success) {
     const { fieldErrors } = z.flattenError(validated.error);
 
@@ -81,7 +92,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { text, accountId } = validated.data;
+  const { text, accountId, forceFailure } = validated.data;
   const account = (accounts as UserContext[]).find((a) => a.id === accountId);
   // If the account is not found, return a 400 error with a message
   if (!account) {
@@ -124,35 +135,59 @@ export async function POST(request: Request) {
     /* continue, to skip the rest of this loop body and start the next item.
      Not break (which exits the loop entirely), not return
     */
-    if (!product) continue;
+    if (!product) {
+      quotes.push({
+        name: item.rawText,
+        quantity: item.quantity,
+        stock: {
+          type: "not found",
+          message: "We couldn't find this in the catalog.",
+        } satisfies ErrorType,
+      });
+      continue;
+    }
     try {
       //if a product is not able to be quoted, it will throw an error, and we will push that error.
-      const quote = await getCachedQuote(account, product);
+      const quote = await getCachedQuote(account, product, forceFailure);
       // ...quote is the spread operator. It copies every key and value out of quote
       // into this new object, then name gets added alongside them.
       // Note: this builds a NEW object, quote itself is untouched.
 
       quotes.push({ ...quote, name: product.name, quantity: item.quantity });
-    } catch {
-      // Later on, We should make it so that gequoteforproduct returns whatever information it can, not just throw an error completely if it fails the stock check.
-      // right now it only fails if the stock check fails, so im re doing logic here to make sure that the rest of the quote still returns, even if the stock check fails
-      quotes.push({
-        sku: product.sku,
-        price: calculatePrice({ account, product }),
-        stock: {
-          type: "timeout",
-          message: "Couldn't check stock for this item. Try again in a moment.",
-        },
-        stockLastUpdated: "hidden",
-        leadTime: product.leadTime,
-        warehouse: accessWarehouse({ account, product })
-          ? product.warehouse
-          : "hidden",
-        events: [],
-        calculatedAt: new Date().toISOString(),
-        name: product.name,
-        quantity: item.quantity,
-      });
+    } catch (error) {
+      // If the error is an instance of StockCheckError, we can access its properties.
+      const cause = error instanceof Error ? error.cause : undefined;
+      const causeMessage = cause instanceof Error ? cause.message : "";
+      const notFound = causeMessage.includes("not found");
+
+      if (notFound) {
+        quotes.push({
+          name: item.rawText,
+          quantity: item.quantity,
+          stock: {
+            type: "not found",
+            message: "We couldn't find this item in the inventory system.",
+          } satisfies ErrorType,
+        });
+      } else {
+        quotes.push({
+          sku: product.sku,
+          price: calculatePrice({ account, product }),
+          stock: {
+            type: "timeout",
+            message: "Couldn't check stock for this item. Try again in a moment.",
+          } satisfies ErrorType,
+          stockLastUpdated: "hidden",
+          leadTime: product.leadTime,
+          warehouse: accessWarehouse({ account, product })
+            ? product.warehouse
+            : "hidden",
+          events: [],
+          calculatedAt: new Date().toISOString(),
+          name: product.name,
+          quantity: item.quantity,
+        });
+      }
     }
   }
   return Response.json(quotes);
