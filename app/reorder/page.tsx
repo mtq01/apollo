@@ -12,7 +12,7 @@ import { AccountContext } from "@/components/account/AccountContext";
 type QuoteRow = {
   sku: string;
   name: string;
-  qty: number;
+  quantity: number;
   price: number;
   stock: "hidden" | number | ErrorType;
   leadTime: number;
@@ -174,7 +174,7 @@ export default function Reorder() {
                     <tr key={row.sku}>
                       <td>{row.sku}</td>
                       <td>{row.name ?? "—"}</td>
-                      <td>{row.qty ?? "—"}</td>
+                      <td>{row.quantity ?? "—"}</td>
                       <td>
                         {row.price != null ? `$${row.price.toFixed(2)}` : "—"}
                       </td>
