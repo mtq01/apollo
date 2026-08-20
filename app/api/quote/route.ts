@@ -3,7 +3,6 @@ import accounts from "@/data/accounts.json";
 import { getQuoteForProduct } from "@/lib/erp/productQuote";
 import type { Product, UserContext, ErrorType, ForcedFailure } from "@/types";
 import { cacheTag } from "next/cache";
-import { accessWarehouse, calculatePrice } from "@/lib/erp/accountRules";
 import { parseOrder } from "@/lib/agent/parseOrder";
 import { lookupProduct } from "@/lib/erp/productLookup";
 import { z } from "zod";
@@ -147,57 +146,27 @@ export async function POST(request: Request) {
       continue;
     }
     try {
-      //if a product is not able to be quoted, it will throw an error, and we will push that error.
+      // getQuoteForProduct no longer throws on a failed stock check, it always
+      // returns normally and reports the failure via `stockError` on the result
+      // instead (see DECISIONS.md, Aug 18). So the quote already carries
+      // whatever succeeded (price, warehouse, etc.) plus the error for what didn't.
       const quote = await getCachedQuote(account, product, forceFailure);
       // ...quote is the spread operator. It copies every key and value out of quote
       // into this new object, then name gets added alongside them.
       // Note: this builds a NEW object, quote itself is untouched.
 
       quotes.push({ ...quote, name: product.name, quantity: item.quantity });
-    } catch (error) {
-      // If the error is an instance of StockCheckError, we can access its properties.
-      const cause = error instanceof Error ? error.cause : undefined;
-      const causeMessage = cause instanceof Error ? cause.message : "";
-      const notFound = causeMessage.includes("not found");
-      /*
-        NOTE FOR TRACK A (Mike) 
-
-        Could getQuoteForProduct always return what it can? and send back the error type?
-        Right now a failed stock check means nothing returns, And I have to re do the logic in to get information that didnt fail.
-        the problem if lets say only 1 thing failed, and the rest worked, I get nothing back, and I have to re do the logic to get the rest of the information that did work.
-        I think it would be better if getQuoteForProduct always returned what it could, and sent back the error type for the things that failed. 
-       
-
-        */
-
-      if (notFound) {
-        quotes.push({
-          name: item.rawText,
-          quantity: item.quantity,
-          stock: {
-            type: "not found",
-            message: "We couldn't find this item in the inventory system.",
-          } satisfies ErrorType,
-        });
-      } else {
-        quotes.push({
-          sku: product.sku,
-          price: calculatePrice({ account, product }),
-          stock: {
-            type: "timeout",
-            message:
-              "Couldn't check stock for this item. Try again in a moment.",
-          } satisfies ErrorType,
-          stockLastUpdated: "hidden",
-          leadTime: product.leadTime,
-          warehouse: accessWarehouse({ account, product })
-            ? product.warehouse
-            : "hidden",
-          calculatedAt: new Date().toISOString(),
-          name: product.name,
-          quantity: item.quantity,
-        });
-      }
+    } catch {
+      // Only reached for a genuinely unexpected error, not a stock-check
+      // failure, that's already handled above via `quote.stockError`.
+      quotes.push({
+        name: item.rawText,
+        quantity: item.quantity,
+        stock: {
+          type: "request failed",
+          message: "Something went wrong pricing this item.",
+        } satisfies ErrorType,
+      });
     }
   }
   return Response.json(quotes);
