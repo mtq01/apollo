@@ -154,8 +154,22 @@ export async function POST(request: Request) {
       // ...quote is the spread operator. It copies every key and value out of quote
       // into this new object, then name gets added alongside them.
       // Note: this builds a NEW object, quote itself is untouched.
+      if (quote.stockError?.type === "not found") {
+        quotes.push({
+          name: item.rawText,
+          quantity: item.quantity,
+          stock: quote.stock,
+          stockError: quote.stockError,
+          events: quote.events,
+        });
+        continue;
+      }
 
-      quotes.push({ ...quote, name: product.name, quantity: item.quantity });
+      quotes.push({
+        ...quote,
+        name: product.name,
+        quantity: item.quantity,
+      });
     } catch {
       // Only reached for a genuinely unexpected error, not a stock-check
       // failure, that's already handled above via `quote.stockError`.

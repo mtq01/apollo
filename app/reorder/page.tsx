@@ -13,7 +13,8 @@ import DisplayActivity from "@/components/activity-log/ActivityLog";
 type QuoteRow = {
   name: string;
   quantity: number | null;
-  stock: "hidden" | number | ErrorType;
+  stock: number | "hidden" | "error" | ErrorType;
+  stockError?: ErrorType;
   sku?: string;
   price?: number;
   leadTime?: number;
@@ -188,11 +189,11 @@ export default function Reorder() {
                 <tbody className="divide-y divide-zinc-200">
                   {results.map((row, index) => (
                     <tr key={index}>
-                      <td>{row.sku}</td>
+                      <td>{row.sku ?? "—"}</td>
                       <td>{row.name ?? "—"}</td>
                       <td>{row.quantity ?? "—"}</td>
                       <td>
-                        {row.price != null ? `$${row.price.toFixed(2)}` : "—"}
+                        {row.price != null ? `${row.price.toFixed(2)}` : "—"}
                       </td>
                       <td>
                         {/* { Stock can be one of three things, so we check them in order.
@@ -217,6 +218,10 @@ export default function Reorder() {
                           </>
                         ) : row.stock === "hidden" ? (
                           "—"
+                        ) : row.stock === "error" ? (
+                          <span className="text-red-900">
+                            {row.stockError?.message ?? "Stock check failed."}
+                          </span>
                         ) : (
                           <span className="text-red-900">
                             {row.stock.message}
@@ -231,7 +236,7 @@ export default function Reorder() {
                       <td>
                         {row.warehouse === "hidden"
                           ? "Restricted"
-                          : row.warehouse}
+                          : (row.warehouse ?? "—")}
                       </td>
                     </tr>
                   ))}
