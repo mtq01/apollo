@@ -29,7 +29,7 @@ write it in the following format:
 - [x] **DECISION**: This is a direct 1:1 match, not "nearest warehouse" or a region-based lookup. A buyer only sees stock/warehouse info for products whose `warehouse` field exactly matches their `assignedWarehouse` — no distance or routing logic exists or is planned.
 - [ ] **TODO**: If real regional routing is ever needed (e.g. "show nearest warehouse with stock", multiple warehouses per account), the data model and comparison logic here would need to change — currently it's a flat equality check.
 
-## August 20, 2026 - Track A
+## August 18, 2026 - Track A
 
 - [x] **DECISION**: `getQuoteForProduct` no longer throws when the stock check fails. It now always returns normally, with everything it already worked out (price, sku, leadTime, warehouse, events, calculatedAt) still included. This closes the Aug 11 TODO about events getting lost on a timeout, and goes further, price/sku/leadTime/warehouse were being lost too, not just events.
 - [x] **DECISION**: Added a `stockError` field to the return value, populated only when the stock check fails. Reused the existing `ErrorType` from `types.ts` instead of making a new local type, so Track A and Track C stay on the same vocabulary for error reasons.
@@ -39,3 +39,15 @@ write it in the following format:
 - [x] **DECISION**: Role-hidden stock is tagged `category: "access"`, not `"stock"`. Nothing failed in that case, the user just isn't allowed to see it, so it shouldn't look like an error in the log.
 - [ ] **TODO**: The failure-reason mapping (`mapStockErrorToReason`) currently reads the exact wording of the error message from `getERPStock` (e.g. checks if the message includes "timed out"). Works today since `mockERP.ts` only throws two distinguishable messages, but it's fragile, if that wording changes later, this silently breaks. Should move to custom error classes or error codes in `mockERP.ts` instead of matching on text.
 - [ ] **TODO**: Right now there's no way to tell apart "the buyer's pasted text never matched any product at all" from "a real product was found but its stock check failed." Only the second case is handled by `getQuoteForProduct`. The first case depends on Track C's fuzzy-match work, which doesn't exist yet. Proposed a `LineItemResult` type for this (matched vs unmatched), not added yet, blocked on Track C's matching landing and a decision on whether `QuoteResult` should move into `types.ts`.
+
+## August 19, 2026 - Architecture review (whole team)
+
+> Came out of a "how would we do this at a fully professional level" review of the codebase and git history. Sorted into what's actually worth doing before Aug 31 vs. what we're consciously deferring.
+
+- [ ] **TODO**: Define a real `ERPAdapter` interface (e.g. `getStock(sku): Promise<{ stock, lastUpdated }>`) that `mockERP.ts` implements, instead of `productQuote.ts` importing `getERPStock` directly. Right now "swappable backend" is true in spirit but nothing in the types actually enforces it, a second implementation could silently not match what the app needs. Cheapest, highest-value item on this list.
+- [ ] **TODO**: `forceFailure` currently lives on the same public `/api/quote` request schema real orders use (`userRequest` in `route.ts`), so any caller of the real endpoint can force a failure. Move it behind a dev-only path or env check before we deploy, it shouldn't be a knob on the production request contract.
+- [ ] **TODO**: Validate required env vars (`ANTHROPIC_API_KEY`) once at startup instead of failing wherever the Anthropic client first gets used. Same tool we already use for request validation (Zod) works for this too.
+- [ ] **TODO**: Add a GitHub Action that runs `lint` + typecheck on every PR and require it to pass before merging into `staging`. Doesn't need real tests to exist first, just gates what we already have.
+- [x] **DECISION**: Considered a declarative permission table (role → capability → condition) to replace the switch statements in `seeStock`/`accessWarehouse`, which duplicate the same `assignedWarehouse` check for `manager` and `buyer`. Decided not to do this now, it's real duplication but small (3 roles, 2 functions), and not worth the refactor time with the deadline this close. Revisit if we add more roles or the rule stops being a flat equality check.
+- [x] **DECISION**: `addOrder()` in `order.ts` does a read-modify-write on `order-history.json` with no lock, so two orders landing at the same instant could clobber each other. Accepting this as a known limitation for demo scope rather than building a write-queue, real concurrent traffic isn't a scenario we'll hit before Aug 31.
+- [x] **DECISION**: Considered splitting the buyer-facing activity log from internal/debug logging (right now `ActivityEvent` is both). Decided against it, it'd touch every file that logs an event, and the payoff (better internal debugging) doesn't matter much for a demo. Worth revisiting if this ever runs against a real ERP.
