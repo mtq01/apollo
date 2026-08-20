@@ -109,3 +109,20 @@ export interface Order {
   items: { sku: string; quantity: number }[];
   timestamp: string;
 }
+
+// shape of the final result this function returns
+export interface QuoteResult {
+  sku: string;                                                      // product identifier
+  price: number;                                                    // final price after any discount
+  stock: number | "hidden" | "error";                               // real stock count, or "hidden" if not allowed to see it. error = stock check failed, see 'stockError'
+  stockLastUpdated: string | "hidden" | "error";                    // when stock was checked, or "hidden"
+  stockError?: ErrorType;                                           // present only when: stock === "error"
+  leadTime: number;                                                 // days until product ships
+  warehouse: string | "hidden";                                     // ship-from warehouse, or "hidden"
+  events: ActivityEvent[];                                          // log of what happened while building this quote
+  calculatedAt: string;                                             // when it was calculated
+}
+
+export type LineItemResult =
+  | { status: "matched"; quote: QuoteResult }
+  | { status: "unmatched"; rawText: string; matchError: ErrorType };
