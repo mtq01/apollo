@@ -51,3 +51,49 @@ write it in the following format:
 - [x] **DECISION**: Considered a declarative permission table (role → capability → condition) to replace the switch statements in `seeStock`/`accessWarehouse`, which duplicate the same `assignedWarehouse` check for `manager` and `buyer`. Decided not to do this now, it's real duplication but small (3 roles, 2 functions), and not worth the refactor time with the deadline this close. Revisit if we add more roles or the rule stops being a flat equality check.
 - [x] **DECISION**: `addOrder()` in `order.ts` does a read-modify-write on `order-history.json` with no lock, so two orders landing at the same instant could clobber each other. Accepting this as a known limitation for demo scope rather than building a write-queue, real concurrent traffic isn't a scenario we'll hit before Aug 31.
 - [x] **DECISION**: Considered splitting the buyer-facing activity log from internal/debug logging (right now `ActivityEvent` is both). Decided against it, it'd touch every file that logs an event, and the payoff (better internal debugging) doesn't matter much for a demo. Worth revisiting if this ever runs against a real ERP.
+
+## August 20, 2026 - Track B
+
+> Wiring Track C's parser into `/api/quote`, plus a forced-failure menu on the reorder page. Track A's Aug 18 change (return instead of throw) landed mid-day and changed what the route had to do.
+
+**What the route sends back, per line item**
+
+- [x] **DECISION**: Three outcomes, three row shapes, decided in `app/api/quote/route.ts`. The page renders whatever it is given, it does not decide what to hide.
+  1. **Quoted** - full row: `sku`, `name`, `price`, `stock` (a number or `"hidden"`), `stockLastUpdated`, `leadTime`, `warehouse`, `events`, `calculatedAt`, `quantity`.
+  2. **Stock check timed out** - the same full row. The ERP just did not answer in time, so price, lead time and warehouse are all still true. `stock` is `"error"` and `stockError.type` is `"timeout"`.
+  3. **Not found** (either the catalog has no match, or the ERP has no record) - only `name` (set to the buyer's raw text), `quantity`, `stock`, `stockError`, and `events`. No `sku`, `price`, `leadTime`, or `warehouse`.
+- [x] **DECISION**: Not-found rows carry the buyer's raw text in `name` rather than a product name. If we cannot confirm the item exists, asserting "Wireless Mouse" claims more than we know. The raw text also lets the buyer see exactly which line failed.
+- [x] **DECISION**: Those fields are omitted at the route, not blanked in the page. Sending a price we have already decided not to display is dead weight, and it invites some future component to render it. Tried the blank-it-in-the-page version first and removed it.
+- [x] **DECISION**: A stock timeout keeps everything, a not-found keeps nothing. A price next to "we could not find this" contradicts itself. A price next to "stock check timed out" does not.
+- [x] **DECISION**: Not-found rows still carry `events`, so the Activity Log shows what happened before the ERP call (price calculated, both retry attempts failing). Those events exist and are useful for debugging even when the row itself is mostly empty.
+
+**Unmatched items are shown, not dropped**
+
+- [x] **DECISION**: When `lookupProduct` finds no catalog match, the line still produces a row. Previously it hit `continue` and vanished, so a buyer pasting three items got two back with no way to tell which one was missing or why. Backed by NN/g's error-message guidance: preserve the user's original input, never fail silently, and offer the fix where possible.
+
+**Page changes** (`app/reorder/page.tsx`)
+
+- [x] **DECISION**: `QuoteRow` makes `sku`, `price`, `leadTime`, `warehouse`, `calculatedAt`, and `events` optional. `name`, `quantity`, and `stock` stay required. An incomplete row is a normal row, not a special case, and every column already falls back to a dash.
+- [x] **DECISION**: The Stock column reads `stockError.message` when `stock === "error"`. Before Track A's change the error object was in `stock` itself, so the old code read `row.stock.message` and silently rendered nothing once `stock` became the string `"error"`.
+- [x] **DECISION**: Table rows are keyed by array index, not `row.sku`. Not-found rows have no sku, so two of them in one order collided on `key={undefined}`.
+- [x] **DECISION**: The activity log markup moved out of the page and into the existing `DisplayActivity` component, which had been written on Day 4 and then never used.
+
+**Forced-failure menu**
+
+- [x] **DECISION**: A dropdown on the reorder page sends an optional `forceFailure` (`"timeout"` or `"not found"`) with the quote request, threaded through to Track A's existing `forceFailure` parameter. Both states now demo on demand instead of waiting for the random 15% timeout.
+- [x] **DECISION**: `forceFailure` is passed as an argument to `getCachedQuote`, not read from an outer variable, so it is part of the cache key. Otherwise a cached success would be replayed and the menu would appear broken.
+- [x] **DECISION**: `null` is converted to `undefined` before the request is sent, because `JSON.stringify` omits `undefined` keys but sends `null`, and `null` fails the `z.enum` check.
+
+**Request validation**
+
+- [x] **DECISION**: The request body is validated with a Zod schema (`text`, `accountId`, optional `forceFailure`) rather than hand-written `if` checks. `safeParse` never throws, so it fits the guard-clause pattern the route already uses.
+- [x] **DECISION**: Any problem with `accountId` reports "Please log in" regardless of which check failed, so Zod's internal wording ("expected int, received number") never reaches a buyer. Text errors keep their specific messages, because "too long" and "empty" need different fixes.
+- [x] **DECISION**: Error objects are written with `satisfies ErrorType` rather than `as ErrorType`. `satisfies` checks the object, `as` silences the check. A `type: "parse failed"` typo was live in this file until the annotation caught it.
+
+**Things this turned up**
+
+- [ ] **TODO**: The Stock column prints `stockError.message` straight from Track A, which is internal wording ("Product not found in ERP system."). Map `stockError.type` to buyer-facing copy in the page instead.
+- [ ] **TODO**: The catalog miss and the ERP not-found are both `type: "not found"`, distinguishable only by which field carries them. Once Track C's fuzzy matching lands, the catalog miss needs its own variant so "did you mean Wireless Mouse?" only fires where it makes sense.
+- [ ] **TODO**: The parser drops items when the quantity trails the product name. `"2 mouses, 2 lanterns"` correctly returns two items, `"mouse 2, page 2"` returns one item named "mouse" and silently loses "page". Trailing numbers appear to read as page or model numbers rather than quantities. Track C, tool description in `recordItemsTool.ts`.
+- [ ] **TODO**: `parseOrder` runs on every request and is not cached, so it dominates request time (~2s) now that the ERP calls are cached. Same text plus same account should give the same parse, so it is cacheable, and caching it would also make results deterministic. Right now the same input can match "mouse" one time and fail the next.
+- [ ] **TODO**: `lookupProduct` only matches by substring, so "wireless mice" does not find "Wireless Mouse". Blocked on the Day 11 fuzzy-matching helper.
