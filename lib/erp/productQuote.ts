@@ -57,7 +57,7 @@ export async function getQuoteForProduct({ account, product}: AccountProductPara
 
   // +++++ First call to 'addEvent': After calculatePrice runs, LOG the PRICE. +++++
   const price = calculatePrice({ account, product });
-  addEvent(`Price Calculated: $${price}`);
+  addEvent(`Price Calculated: $${price} — ${product.name}`);
 
 
   const canSeeStock = seeStock({ account, product });               // is this role allowed to see stock?
@@ -81,12 +81,12 @@ export async function getQuoteForProduct({ account, product}: AccountProductPara
         const stockResponse = await getERPStock(product.sku, forceFailure);   // ask the fake ERP for stock (normally random), but throws immediately if forceFailure was passed.
         stock = stockResponse.stock;                                          // pull the number out of the response
         stockLastUpdated = stockResponse.lastUpdated;                         // pull the timestamp out too
-        addEvent(`Stock Checked: ${stock} available`);                        // log that the stock check finished
+        addEvent(`Stock Checked: ${stock} available — ${product.name}`);                        // log that the stock check finished
         succeeded = true;                                                     // mark success so we know not to retry
         break;                                                                // it worked, stop trying.
     } catch (err) {
       lastError = err;                                                        // save it, but dont throw yet, let the loop try again.
-      addEvent(`Stock check attempt ${attempt} failed`);                      // log the failed attempt so its not silent
+      addEvent(`Stock check attempt ${attempt} failed — ${product.name}`);                      // log the failed attempt so its not silent
     }
   } 
    
@@ -98,7 +98,7 @@ export async function getQuoteForProduct({ account, product}: AccountProductPara
   } else {
       // if unsuccessful (false)
       // logs the event instead of staying hidden. (now every quote produces a log entry)
-      addEvent(`Stock Hidden: not visible for this account's role of "${account.role}"`);  
+      addEvent(`Stock Hidden: not visible for this account's role of "${account.role}" — ${product.name}`);  
     }
   
 

@@ -1,6 +1,6 @@
 /* quote route ping test :*/
 import accounts from "@/data/accounts.json";
-import { getQuoteForProduct, StockCheckError } from "@/lib/erp/productQuote";
+import { getQuoteForProduct } from "@/lib/erp/productQuote";
 import type { Product, UserContext, ErrorType, ForcedFailure } from "@/types";
 import { cacheTag } from "next/cache";
 import { accessWarehouse, calculatePrice } from "@/lib/erp/accountRules";
@@ -159,6 +159,16 @@ export async function POST(request: Request) {
       const cause = error instanceof Error ? error.cause : undefined;
       const causeMessage = cause instanceof Error ? cause.message : "";
       const notFound = causeMessage.includes("not found");
+      /*
+        NOTE FOR TRACK A (Mike) 
+
+        Could getQuoteForProduct always return what it can? and send back the error type?
+        Right now a failed stock check means nothing returns, And I have to re do the logic in to get information that didnt fail.
+        the problem if lets say only 1 thing failed, and the rest worked, I get nothing back, and I have to re do the logic to get the rest of the information that did work.
+        I think it would be better if getQuoteForProduct always returned what it could, and sent back the error type for the things that failed. 
+       
+
+        */
 
       if (notFound) {
         quotes.push({
@@ -175,14 +185,14 @@ export async function POST(request: Request) {
           price: calculatePrice({ account, product }),
           stock: {
             type: "timeout",
-            message: "Couldn't check stock for this item. Try again in a moment.",
+            message:
+              "Couldn't check stock for this item. Try again in a moment.",
           } satisfies ErrorType,
           stockLastUpdated: "hidden",
           leadTime: product.leadTime,
           warehouse: accessWarehouse({ account, product })
             ? product.warehouse
             : "hidden",
-          events: [],
           calculatedAt: new Date().toISOString(),
           name: product.name,
           quantity: item.quantity,

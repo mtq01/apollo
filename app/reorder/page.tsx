@@ -8,6 +8,7 @@ import EmptyState from "@/components/EmptyState";
 import ErrorMessage from "@/components/ErrorMessage";
 import { ErrorType, ActivityEvent, ForcedFailure } from "@/types";
 import { AccountContext } from "@/components/account/AccountContext";
+import DisplayActivity from "@/components/activity-log/ActivityLog";
 
 type QuoteRow = {
   name: string;
@@ -242,19 +243,7 @@ export default function Reorder() {
       </div>
       <aside className="w-md shrink-0 flex flex-col leading-10 tracking-tight text-black bg-white rounded-lg p-6">
         <h2 className="text-3xl font-semibold pb-8">Activities</h2>
-        <ol className="flex flex-col gap-12">
-          {activity.map((event) => (
-            <li key={event.id}>
-              <p className="font-semibold text-lg">{event.message}</p>
-              <p className="text-sm text-gray-800">
-                {new Date(event.timestamp).toLocaleTimeString([], {
-                  hour: "numeric",
-                  minute: "2-digit",
-                })}
-              </p>
-            </li>
-          ))}
-        </ol>
+        <DisplayActivity events={activity} />
       </aside>
     </div>
   );

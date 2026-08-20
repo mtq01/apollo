@@ -28,14 +28,20 @@ import { ActivityEvent } from "@/types";
 // its required bcuz events.map() only works on arrays, not single objects.
 function DisplayActivity({ events }: { events: ActivityEvent[] }) {
   return (
-    <ul>
+    <ol className="flex flex-col gap-12">
       {/* JSX elements directly inside a map() call ALWAYS need keys!!! */}
       {events.map((activity) => (
         <li key={activity.id}>
-          {activity.message} at {activity.timestamp}
+          <p className="font-semibold text-lg">{activity.message}</p>
+          <p className="text-sm text-gray-800">
+            {new Date(activity.timestamp).toLocaleTimeString([], {
+              hour: "numeric",
+              minute: "2-digit",
+            })}
+          </p>
         </li>
       ))}
-    </ul>
+    </ol>
   );
 }
 
