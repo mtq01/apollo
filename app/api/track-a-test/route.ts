@@ -39,15 +39,20 @@
         events, or a wrong first/last event, would mean something's
         actually broken.
 
-   5. Scenario 2 — forced failure (admin account, forceFailure: "timeout")
-      - Expect: the first attempt fails, retries once, fails again,
-        and throws a StockCheckError — not a generic/raw error.
-      - Expect exactly 3 events in this order: "Price Calculated",
-        "Stock check attempt 1 failed", "Stock check attempt 2 failed".
-      - Expect the thrown error's `.cause` to hold the original
-        "ERP request timed out" error, not just a vague message.
-      - Confirms: one failure doesn't throw immediately, a second
-        failure does, and nothing logged before the failure is lost.
+   5. Scenario 2 — forced failure (admin account, forceFailure: "timeout",
+      then again with "not found")
+      - Expect: the first attempt fails, retries once, fails again —
+        and the function returns NORMALLY instead of throwing.
+      - Expect price, sku, leadTime, warehouse, and events to still be
+        present in the result — nothing gets lost on a failed check.
+      - Expect result.stock === "error" and result.stockError.type to
+        match whichever failure was forced ("timeout" or "not found").
+      - Expect exactly 4 events in this order: "Price Calculated",
+        "Stock check attempt 1 failed", "Stock check attempt 2 failed",
+        "Stock Check Failed: <reason>".
+      - Confirms: one failure doesn't stop anything, a second failure
+        doesn't throw either — it's recorded as data, not an exception,
+        and nothing logged (or calculated) before the failure is lost.
 
    6. Scenario 3 — role/warehouse mismatch (Mike, a buyer assigned to
       Calgary, checking a product warehoused in Vancouver)
@@ -59,41 +64,55 @@
 import { NextResponse } from "next/server";
 import { addOrder, getOrderHistory } from "@/lib/order/order";
 import { getERPStock } from "@/lib/erp/mockERP";
-import { getQuoteForProduct, StockCheckError } from "@/lib/erp/productQuote";
+import { getQuoteForProduct } from "@/lib/erp/productQuote";
 import type { UserContext, Product } from "@/types"; // adjust path if types.ts lives elsewhere
 
 export async function GET() {
-  const results: string[] = [];
+  const results: unknown[] = [];
+
+  // Logs to BOTH the terminal (as flattened readable text) and the
+  // browser's JSON response (keeping objects nested, not double-stringified).
   const log = (...args: unknown[]) => {
-    const line = args
-      .map((a) => (typeof a === "string" ? a : JSON.stringify(a)))
+    const consoleLine = args
+      .map((arg) => (typeof arg === "string" ? arg : JSON.stringify(arg)))
       .join(" ");
-    console.log(line);
-    results.push(line);
+    console.log(consoleLine);
+
+    results.push(args.length === 1 ? args[0] : args);
   };
 
   // +++++ Day 8 tests +++++
-  const a = await getERPStock("SKU-1001");
-  const b = await getERPStock("SKU-1001");
-  log(
-    "Same SKU, two calls:",
-    a.stock,
-    b.stock,
-    a.stock === b.stock ? "✅ matches" : "❌ different",
-  );
+
+  // Call getERPStock twice with the same SKU — same input should always
+  // give the same stock number (see hashSkuToStock in mockERP.ts).
+try {
+    const firstStockCheck = await getERPStock("SKU-1001");
+    const secondStockCheck = await getERPStock("SKU-1001");
+    log(
+      "Same SKU, two calls:",
+      firstStockCheck.stock,
+      secondStockCheck.stock,
+      firstStockCheck.stock === secondStockCheck.stock ? "✅ matches" : "❌ different",
+    );
+  } catch (err) {
+    log(
+      "Same SKU, two calls: ⚠️ hit the random 15% simulated timeout — not a real bug, just reload the page to try again",
+      err instanceof Error ? err.message : err,
+    );
+  }
 
   const mikesOrders = await getOrderHistory(3);
   log("Mike's orders count:", mikesOrders.length);
 
-  const before = (await getOrderHistory(3)).length;
+  const orderCountBefore = (await getOrderHistory(3)).length;
   await addOrder({
     id: crypto.randomUUID(),
     accountId: 3,
     items: [{ sku: "SKU-1007", quantity: 1 }],
     timestamp: new Date().toISOString(),
   });
-  const after = (await getOrderHistory(3)).length;
-  log("Order count for Mike, before → after:", before, "→", after);
+  const orderCountAfter = (await getOrderHistory(3)).length;
+  log("Order count for Mike, before → after:", orderCountBefore, "→", orderCountAfter);
 
   // +++++ Day 9 tests — real accounts + real products +++++
 
@@ -113,59 +132,85 @@ export async function GET() {
   };
 
   // Scenario 1: normal success (broken into readable pieces)
-  const result = await getQuoteForProduct({
+  const successResult = await getQuoteForProduct({
     account: visibleAccount,
     product: testProduct,
   });
-  const messages = result.events.map((e) => e.message);
+  const successMessages = successResult.events.map((event) => event.message);
 
-  const startsWithPrice = messages[0]?.startsWith("Price Calculated");
+  const startsWithPrice = successMessages[0]?.startsWith("Price Calculated");
   const endsWithStockChecked =
-    messages[messages.length - 1]?.startsWith("Stock Checked");
-  const reasonableEventCount = messages.length === 2 || messages.length === 3;
+    successMessages[successMessages.length - 1]?.startsWith("Stock Checked");
+  const reasonableEventCount = successMessages.length === 2 || successMessages.length === 3;
   const scenario1Correct =
     startsWithPrice && endsWithStockChecked && reasonableEventCount;
 
-  log("Success case events:", messages);
+  log("Success case events:", successMessages);
   log("First event is Price Calculated:", startsWithPrice ? "✅" : "❌");
   log("Last event is Stock Checked:", endsWithStockChecked ? "✅" : "❌");
   log(
     "Event count is 2 or 3:",
     reasonableEventCount ? "✅" : "❌",
-    `(got ${messages.length})`,
+    `(got ${successMessages.length})`,
   );
   log("Scenario 1 overall:", scenario1Correct ? "✅" : "❌");
 
-  // Scenario 2: forced failure — should retry once, then throw
-  try {
-    await getQuoteForProduct(
-      { account: visibleAccount, product: testProduct },
-      "timeout",
-    );
-    log("❌ Expected a throw, didn't get one");
-  } catch (err) {
-    if (err instanceof StockCheckError) {
-      log(
-        "Forced failure events:",
-        err.events.map((e) => e.message),
-      );
-      const scenario2Correct =
-        err.events.length === 3 &&
-        err.events[0].message.startsWith("Price Calculated") &&
-        err.events[1].message === "Stock check attempt 1 failed" &&
-        err.events[2].message === "Stock check attempt 2 failed";
-      log(
-        "Scenario 2 (right events, in order):",
-        scenario2Correct ? "✅" : "❌",
-      );
-      log(
-        "Cause preserved:",
-        err.cause instanceof Error ? err.cause.message : err.cause,
-      );
-    } else {
-      log("❌ Wrong error type:", err);
-    }
-  }
+  // Scenario 2: forced failure — should NOT throw. Should return normally
+  // with price/sku/leadTime/warehouse/events all still intact, plus
+  // stock === "error" and a stockError explaining why.
+  const forcedTimeoutResult = await getQuoteForProduct(
+    { account: visibleAccount, product: testProduct },
+    "timeout",
+  );
+  const timeoutMessages = forcedTimeoutResult.events.map((event) => event.message);
+
+  const scenario2Correct =
+    forcedTimeoutResult.price !== undefined &&
+    forcedTimeoutResult.sku !== undefined &&
+    forcedTimeoutResult.leadTime !== undefined &&
+    forcedTimeoutResult.stock === "error" &&
+    forcedTimeoutResult.stockError?.type === "timeout" &&
+    timeoutMessages.length === 4 &&
+    timeoutMessages[0].startsWith("Price Calculated") &&
+    timeoutMessages[1] === "Stock check attempt 1 failed — Wireless Mouse" &&
+    timeoutMessages[2] === "Stock check attempt 2 failed — Wireless Mouse" &&
+    timeoutMessages[3].startsWith("Stock Check Failed");
+
+  log("Forced timeout — full result:", forcedTimeoutResult);
+  log("Forced timeout events:", timeoutMessages);
+  log(
+    "Price/sku/leadTime still present:",
+    forcedTimeoutResult.price !== undefined &&
+      forcedTimeoutResult.sku !== undefined &&
+      forcedTimeoutResult.leadTime !== undefined
+      ? "✅"
+      : "❌",
+  );
+  log("stock === 'error':", forcedTimeoutResult.stock === "error" ? "✅" : "❌");
+  log(
+    "stockError.type === 'timeout':",
+    forcedTimeoutResult.stockError?.type === "timeout" ? "✅" : "❌",
+  );
+  log("Scenario 2 overall (no throw, everything intact):", scenario2Correct ? "✅" : "❌");
+
+  // Scenario 2b: same idea, forced "not found" instead — confirms the
+  // second reason code also comes through correctly.
+  const forcedNotFoundResult = await getQuoteForProduct(
+    { account: visibleAccount, product: testProduct },
+    "not found",
+  );
+  const scenario2bCorrect =
+    forcedNotFoundResult.price !== undefined &&
+    forcedNotFoundResult.stock === "error" &&
+    forcedNotFoundResult.stockError?.type === "not found";
+
+  log(
+    "Forced not-found — stock:",
+    forcedNotFoundResult.stock,
+    "| stockError.type:",
+    forcedNotFoundResult.stockError?.type,
+  );
+  log("Scenario 2b overall:", scenario2bCorrect ? "✅" : "❌");
 
   // Scenario 3: Mike (buyer, Calgary) + same product (Vancouver) — guaranteed mismatch
   const hiddenAccount: UserContext = {
@@ -186,7 +231,7 @@ export async function GET() {
   );
   log(
     "Hidden case events:",
-    hiddenResult.events.map((e) => e.message),
+    hiddenResult.events.map((event) => event.message),
   );
 
   return NextResponse.json({ results });

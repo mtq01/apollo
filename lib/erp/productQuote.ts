@@ -1,43 +1,20 @@
-import type { AccountProductParams, ActivityEvent, ForcedFailure} from "../../types";
+import type { AccountProductParams, ActivityEvent, ForcedFailure, ErrorType, ActivityCategory, LineItemResult, QuoteResult} from "../../types";
 import { calculatePrice, seeStock, accessWarehouse } from "./accountRules";
 import { getERPStock } from "./mockERP";
 import { randomUUID } from "crypto";
 
 // +++++ This file combines the 3 functions created in Week 1: 'accountRules.ts' +++++
 
-/* StockCheckError
-  [WHAT] Custom Error for Failed Stock Check
+// maps whatever getERPStock throws into our ErrorType shape
+function mapStockErrorToReason(err: unknown): ErrorType {
+  const message = err instanceof Error ? err.message : "Unknown stock check error";
 
-  [HOW] Works like a normal Error, but carries two extra pieces of information:
-    1. events: everything that was already logged before the failure (ex. 'price was calculated') so that work isnt lost.
-    2. cause: the original error that caused the failure, so we know exactly what went wrong.
+  if (message.includes("timed out")) return { type: "timeout", message };
+  if (message.includes("not found")) return { type: "not found", message };
 
-  [WHY] Without this, if the stock check failed partway through, we would lose track of everything that happened before the failure.
-    - We would also lose the real error too, replacing it with something vague.
-    - This way, nothing gets thrown away when something breaks.
-
-  +++ This pairs with the 'try/catch' below inside the if (canSeeStock) conditional
-*/
-export class StockCheckError extends Error {
-  constructor(message: string, public events: ActivityEvent[], public cause?: unknown) {
-    super(message);
-    this.name = "StockCheckError";
-  }
+  // mockERP doesn't currently throw "restricted" or "invalid input" for stock checks, this is a fallback in case that changes later.
+  return { type: "invalid input", message };
 }
-
-
-// shape of the final result this function returns
-interface QuoteResult {
-  sku: string;                                                      // product identifier
-  price: number;                                                    // final price after any discount
-  stock: number | "hidden";                                         // real stock count, or "hidden" if not allowed to see it
-  stockLastUpdated: string | "hidden";                              // when stock was checked, or "hidden"
-  leadTime: number;                                                 // days until product ships
-  warehouse: string | "hidden";                                     // ship-from warehouse, or "hidden"
-  events: ActivityEvent[];                                          // log of what happened while building this quote
-  calculatedAt: string;                                             // when it was calculated
-}
-
 
 // Builds a full quote for one account + product. forceFailure optionally triggers a specific ERP error for testing.
 export async function getQuoteForProduct({ account, product}: AccountProductParams, forceFailure?: ForcedFailure): Promise<QuoteResult> {
@@ -47,24 +24,26 @@ export async function getQuoteForProduct({ account, product}: AccountProductPara
 
   // +++++ addEvent helper function
   // prevents repeating the same 4-line object everytime we log something
-  function addEvent(message: string) {
+  function addEvent(message: string, category: ActivityCategory) {
     events.push({
       id: randomUUID(),                                             // creates a unique 36character long v4 UUID - https://developer.mozilla.org/en-US/docs/Web/API/Crypto/randomUUID
       message,                                                      // human-friendly description of what happened
       timestamp: new Date().toISOString(),                          // when it happened
+      category,
     });
   }
 
   // +++++ First call to 'addEvent': After calculatePrice runs, LOG the PRICE. +++++
   const price = calculatePrice({ account, product });
-  addEvent(`Price Calculated: $${price} — ${product.name}`);
+  addEvent(`Price Calculated: $${price} — ${product.name}`, "price");
 
 
   const canSeeStock = seeStock({ account, product });               // is this role allowed to see stock?
   const canSeeWarehouse = accessWarehouse({ account, product });    // is this role allowed to see warehouse?
 
-  let stock: number | "hidden" = "hidden";                          // default to hidden until proven visible
-  let stockLastUpdated: string | "hidden" = "hidden";               // same default for the timestamp
+  let stock: number | "hidden" | "error" = "hidden";                // default to hidden until proven visible
+  let stockLastUpdated: string | "hidden" | "error" = "hidden";     // same default for the timestamp
+  let stockError: ErrorType | undefined;
 
   // +++++ After a successful getERPStock() call, LOG the STOCK. +++++
   if (canSeeStock) {
@@ -76,29 +55,34 @@ export async function getQuoteForProduct({ account, product}: AccountProductPara
 
     
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      // if checking stock fails, catch it & wrap in StockCheckError so we dont lose the events logged so far
+      // if checking stock fails, save the error and let the loop retry. nothing is thrown here, so events/price already gathered aren't lost
       try {
-        const stockResponse = await getERPStock(product.sku, forceFailure);   // ask the fake ERP for stock (normally random), but throws immediately if forceFailure was passed.
-        stock = stockResponse.stock;                                          // pull the number out of the response
-        stockLastUpdated = stockResponse.lastUpdated;                         // pull the timestamp out too
-        addEvent(`Stock Checked: ${stock} available — ${product.name}`);                        // log that the stock check finished
-        succeeded = true;                                                     // mark success so we know not to retry
-        break;                                                                // it worked, stop trying.
+        const stockResponse = await getERPStock(product.sku, forceFailure);           // ask the fake ERP for stock (normally random), but throws immediately if forceFailure was passed.
+        stock = stockResponse.stock;                                                  // pull the number out of the response
+        stockLastUpdated = stockResponse.lastUpdated;                                 // pull the timestamp out too
+        addEvent(`Stock Checked: ${stock} available — ${product.name}`, "stock");     // log that the stock check finished
+        succeeded = true;                                                             // mark success so we know not to retry
+        break;                                                                        // it worked, stop trying.
     } catch (err) {
-      lastError = err;                                                        // save it, but dont throw yet, let the loop try again.
-      addEvent(`Stock check attempt ${attempt} failed — ${product.name}`);                      // log the failed attempt so its not silent
+      lastError = err;                                                                // save it, but dont throw yet, let the loop try again.
+      addEvent(`Stock check attempt ${attempt} failed — ${product.name}`, "stock");   // log the failed attempt so its not silent
     }
   } 
    
-  /* +++++ If every attempt failed, give up and throw this +++++
+  /* +++++ IF EVERY ATTEMPT FAILED, record the reason and keep going+++++
+  - Instead of throwing (which discarded price/events), we fall through to the normal return below 
+  with everything else that was already calculated still intact.
   - it only reaches this if the loop above finished without ever returning true. */
   if (!succeeded) {
-    throw new StockCheckError("Stock check failed", events, lastError);       // carries the events plus real error along with it
+    stock = "error";
+    stockLastUpdated = "error";
+    stockError = mapStockErrorToReason(lastError);
+    addEvent(`Stock Check Failed: ${stockError.type} - ${product.name}`, "stock");
     }   
   } else {
       // if unsuccessful (false)
       // logs the event instead of staying hidden. (now every quote produces a log entry)
-      addEvent(`Stock Hidden: not visible for this account's role of "${account.role}" — ${product.name}`);  
+      addEvent(`Stock Hidden: not visible for this account's role of "${account.role}" — ${product.name}`, "access");  
     }
   
 
@@ -116,6 +100,7 @@ export async function getQuoteForProduct({ account, product}: AccountProductPara
     price,
     stock,
     stockLastUpdated,
+    stockError,
     leadTime: product.leadTime,
     warehouse: canSeeWarehouse ? product.warehouse : "hidden",      // only include warehouse if allowed
     events,                                                         // full log of everything that happened above
