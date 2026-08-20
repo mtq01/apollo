@@ -85,10 +85,18 @@ export interface AccountProductParams {
 
 /* used for logging a short, readable msg history of what action was taken.
 [example]: the 'getQuoteForProduct' function in 'productQuote.ts' will log the product quote & time it took place. */
+export type ActivityCategory =
+  | "price"
+  | "stock"
+  | "error"
+  | "access"
+  | "order";
+
 export interface ActivityEvent {
   id: string;
   message: string;
   timestamp: string;
+  category?: ActivityCategory;
 }
 
 /* The specific failures getERPStock can be forced to throw on demand, for testing and demoing. 

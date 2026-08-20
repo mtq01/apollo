@@ -6,19 +6,20 @@ import Loader from "@/components/Loader";
 import { CircleAlert, TriangleAlert } from "@/components/icons";
 import EmptyState from "@/components/EmptyState";
 import ErrorMessage from "@/components/ErrorMessage";
-import { ErrorType, ActivityEvent } from "@/types";
+import { ErrorType, ActivityEvent, ForcedFailure } from "@/types";
 import { AccountContext } from "@/components/account/AccountContext";
+import DisplayActivity from "@/components/activity-log/ActivityLog";
 
 type QuoteRow = {
-  sku: string;
   name: string;
-  qty: number;
-  price: number;
+  quantity: number | null;
   stock: "hidden" | number | ErrorType;
-  leadTime: number;
-  warehouse: string;
-  calculatedAt: string;
-  events: ActivityEvent[];
+  sku?: string;
+  price?: number;
+  leadTime?: number;
+  warehouse?: string;
+  calculatedAt?: string;
+  events?: ActivityEvent[];
 };
 
 export default function Reorder() {
@@ -30,9 +31,10 @@ export default function Reorder() {
   const [error, setError] = useState<ErrorType | null>(null);
   const [text, setText] = useState("");
   const [results, setResults] = useState<QuoteRow[] | null>(null);
+  const [forceFailure, setForceFailure] = useState<ForcedFailure | null>(null);
 
   // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/flatMap
-  const activity = results?.flatMap((row) => row.events) ?? [];
+  const activity = results?.flatMap((row) => row.events ?? []) ?? [];
 
   // Function to get quote from the server
   const getQuote = async () => {
@@ -41,7 +43,11 @@ export default function Reorder() {
     try {
       const response = await fetch("/api/quote", {
         method: "POST",
-        body: JSON.stringify({ text, accountId }),
+        body: JSON.stringify({
+          text,
+          accountId,
+          forceFailure: forceFailure ?? undefined,
+        }),
       });
 
       if (!response.ok) {
@@ -121,6 +127,16 @@ export default function Reorder() {
             Get quote
           </button>
         </form>
+        <select
+          value={forceFailure ?? ""}
+          onChange={(e) =>
+            setForceFailure((e.target.value || null) as ForcedFailure | null)
+          }
+        >
+          <option value="">No forced failure</option>
+          <option value="timeout">Force timeout</option>
+          <option value="not found">Force not found</option>
+        </select>
         {isLoading ? (
           <div className="flex w-full flex-col items-center gap-4 py-16">
             <Loader />
@@ -170,11 +186,11 @@ export default function Reorder() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-200">
-                  {results.map((row) => (
-                    <tr key={row.sku}>
+                  {results.map((row, index) => (
+                    <tr key={index}>
                       <td>{row.sku}</td>
                       <td>{row.name ?? "—"}</td>
-                      <td>{row.qty ?? "—"}</td>
+                      <td>{row.quantity ?? "—"}</td>
                       <td>
                         {row.price != null ? `$${row.price.toFixed(2)}` : "—"}
                       </td>
@@ -227,19 +243,7 @@ export default function Reorder() {
       </div>
       <aside className="w-md shrink-0 flex flex-col leading-10 tracking-tight text-black bg-white rounded-lg p-6">
         <h2 className="text-3xl font-semibold pb-8">Activities</h2>
-        <ol className="flex flex-col gap-12">
-          {activity.map((event) => (
-            <li key={event.id}>
-              <p className="font-semibold text-lg">{event.message}</p>
-              <p className="text-sm text-gray-800">
-                {new Date(event.timestamp).toLocaleTimeString([], {
-                  hour: "numeric",
-                  minute: "2-digit",
-                })}
-              </p>
-            </li>
-          ))}
-        </ol>
+        <DisplayActivity events={activity} />
       </aside>
     </div>
   );
