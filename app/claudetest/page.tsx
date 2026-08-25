@@ -1,10 +1,14 @@
 "use client";
 
 const apiTest = () => {
-  const testClaude = async () => {
+  const testClaude = async (text: string) => {
     try {
       const response = await fetch("/api/test", {
         method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ text }),
       });
 
       /*
@@ -100,7 +104,7 @@ const apiTest = () => {
       // null means no replacer, 2 means indent with 2 spaces
       // if we had a relaccer, we could choose what we want to show, but we want everything, so null is fine
 
-      console.log(JSON.stringify(data.results, null, 2));
+      console.log(JSON.stringify(data, null, 2));
     } catch (error) {
       console.error("Something went wrong:", error);
     }
@@ -111,10 +115,17 @@ const apiTest = () => {
         Claude Test
       </h1>
       <button
-        onClick={testClaude}
+        onClick={() => testClaude("I need a keyboard and 2 mouses")}
         className="rounded-lg bg-blue-500 px-4 py-2 hover:bg-blue-800"
       >
-        TEST ME CHECK CONSOLE FOR RESULTS
+        TEST REGULAR ORDER
+      </button>
+
+      <button
+        onClick={() => testClaude("Reorder what I got last time")}
+        className="rounded-lg bg-green-500 px-4 py-2 hover:bg-green-800"
+      >
+        TEST REORDER
       </button>
     </div>
   );
