@@ -62,7 +62,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { addOrder, getOrderHistory } from "@/lib/order/order";
+import { addOrder, getOrderHistory } from "@/lib/erp/order";
 import { getERPStock } from "@/lib/erp/mockERP";
 import { getQuoteForProduct } from "@/lib/erp/productQuote";
 import type { UserContext, Product } from "@/types"; // adjust path if types.ts lives elsewhere

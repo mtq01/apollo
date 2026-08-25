@@ -1,4 +1,4 @@
-import { addOrder, getOrderHistory } from "../order/order";
+import { addOrder, getOrderHistory } from "../erp/order";
 import { getERPStock } from "../erp/mockERP";
 import { getQuoteForProduct } from "../erp/productQuote";
 import type { UserContext, Product } from "@/types";
