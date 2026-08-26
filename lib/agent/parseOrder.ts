@@ -32,7 +32,7 @@ export async function parseOrder(
       tools: [record_items, get_order_history],
 
       tool_choice: {
-        type: "auto",
+        type: "any",
       },
 
       messages,
