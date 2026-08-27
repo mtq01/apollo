@@ -1,26 +1,30 @@
-import { findClosestMatches } from "@/lib/erp/fuzzyMatch";
-import type { Product } from "@/types";
+import { findClosestMatches } from "@/lib/erp/fuzzyMatch"; 
+import type { ErrorType, Product } from "@/types";        
 
-/* Turns a raw fuzzy-match result into something buyer-facing. findClosestMatches only returns data (products + scores),
-this is where that data becomes a plain-English message, same tone as buyerErrorMessage in errorMessages.ts. No "score" 
-or internal wording ever reaches this message, only product names the buyer would recognize. */
+// turns findClosestMatches's raw data into exactly what LineItemResult's "unmatched" case needs, no extra wrapping required by the caller
 export function suggestAlternatives(rawText: string): {
-  suggestions: { product: Product; score: number }[];
-  message: string;
+  suggestions: { product: Product; score: number }[];           // the close-guess products
+  matchError: ErrorType;                                        // ready-to-use error, message included
 } {
-  const suggestions = findClosestMatches(rawText);
+  const suggestions = findClosestMatches(rawText);              // look for close matches
 
   if (suggestions.length === 0) {
+    // nothing was close enough. no "did you mean" here, since there's nothing to suggest
     return {
       suggestions,
-      message: `We couldn't find "${rawText}" in the catalog.`,
+      matchError: {
+        type: "not found",
+        message: `We couldn't find "${rawText}" in the catalog.`,
+      },
     };
   }
 
-  const names = suggestions.map((match) => match.product.name).join(", ");
-
+  // at least one close match was found. the actual product names are shown separately as a list (see page.tsx), not repeated in this message
   return {
     suggestions,
-    message: `We couldn't find "${rawText}" exactly. Did you mean: ${names}?`,
+    matchError: {
+      type: "not found",
+      message: `We couldn't find "${rawText}" exactly. Did you mean one of these?`,
+    },
   };
 }

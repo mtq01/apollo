@@ -1,59 +1,49 @@
-import catalog from "@/data/catalog.json";
-import { distance } from "fastest-levenshtein";
-import type { Product } from "@/types";
+import catalog from "@/data/catalog.json";                            
+import { distance } from "fastest-levenshtein";                         // tells us how many letters differ between two words
+import type { Product } from "@/types";     
 
 
-/*
-- getCutoff — decides how many character-edits are "too many" before a suggestion isn't worth showing, scaled to how long the query is (short SKU = tighter tolerance, longer name = a bit more slack), capped between 1 and 3.
-- findClosestMatches — normalizes the buyer's query (lowercase, trimmed), then for every catalog product computes the edit-distance against both product.name and product.sku, keeping whichever is closer (Math.min). That's your "match against name or SKU" decision, both checked in one pass.
-- .filter(...) — drops anything whose distance is worse than the cutoff, so a wildly-off guess (e.g. "banana") returns nothing instead of forcing a suggestion.
-- .sort(...) — puts the closest match first.
-- .slice(0, 3) — caps it at 3 suggestions, per the "2-3 closest matches" spec.
+/* [ LEVENSHTEIN DISTANCE EQUATION ]
+
+    It counts how many letters you'd need to change to turn one word into another. The more letters you'd need to change, the less alike the words are.
+    - [Example]: turning "kabord" into "keyboard" takes 3 letter changes, so distance("kabord", "keyboard") returns 3.
 */
 
-/* How many characters different we're willing to accept before saying "too different, don't suggest this" - scaled to how long the query is.
-- A short SKU typo gets a tighter cutoff than a longer product name typo.
-- Never less than 1 (always allow at least a 1-character typo), never more than 3 (so we don't start suggesting wildly different products). */
+// decides how many letters can be different before we say "too different, don't suggest this"
 function getCutoff(query: string): number {
-  const relative = Math.ceil(query.length * 0.4); // 40% of the query's length
-  return Math.min(3, Math.max(1, relative));
+  const relative = Math.ceil(query.length * 0.4);                       // allow about 40% of the word's length to be wrong
+  return Math.min(3, Math.max(1, relative));                            // but never less than 1, never more than 3
 }
 
 export function findClosestMatches(
-  query: string,
+  query: string,                                                        // what the buyer typed
 ): { product: Product; score: number }[] {
-  const normalizedQuery = query.toLowerCase().trim();
-  const cutoff = getCutoff(normalizedQuery);
+  const normalizedQuery = query.toLowerCase().trim();                   // lowercase, no extra spaces - so casing isn't counted as a typo
+  const cutoff = getCutoff(normalizedQuery);                            // how different is "too different" for this query
 
-  // for every product in the catalog, check the query against its name, its sku,
-  // AND each individual word inside its name, and keep whichever is closest.
-  //
-  // why check individual words too: comparing "kabord" against the whole string
-  // "mechanical keyboard" gives a huge distance, since "mechanical " isn't in the
-  // query at all - even though "kabord" is a near-perfect typo of just "keyboard".
-  // checking each word separately lets a one-word typo match the one word it's
-  // actually close to, instead of being penalized for the rest of a multi-word name.
+  // check this query against every product in the catalog
   const scored = (catalog as Product[]).map((product) => {
-    const normalizedName = product.name.toLowerCase().trim();
-    const nameWords = normalizedName.split(" ");
+    const normalizedName = product.name.toLowerCase().trim();           // product name, lowercase and trimmed
+    const nameWords = normalizedName.split(" ");                        // split the name into separate words
 
+    // keep whichever comparison came out closest
     const nameDistance = Math.min(
-      distance(normalizedQuery, normalizedName),
-      ...nameWords.map((word) => distance(normalizedQuery, word)),
-    );
+      distance(normalizedQuery, normalizedName),                        // compare against the whole name
+      ...nameWords.map((word) => distance(normalizedQuery, word)),      // AND compare against each word on its own
+    ); 
 
     const skuDistance = distance(
       normalizedQuery,
-      product.sku.toLowerCase().trim(),
+      product.sku.toLowerCase().trim(),                                 // also compare against the product's sku
     );
 
-    const score = Math.min(nameDistance, skuDistance);
+    const score = Math.min(nameDistance, skuDistance);                  // use whichever is closer: the name or the sku
 
-    return { product, score };
+    return { product, score };                                          // pair this product with how close it is
   });
 
   return scored
-    .filter((match) => match.score <= cutoff)   // drop anything too different
-    .sort((a, b) => a.score - b.score)          // closest match first
-    .slice(0, 3);                               // only the top 3
+    .filter((match) => match.score <= cutoff)                           // remove anything too different
+    .sort((a, b) => a.score - b.score)                                  // put the closest match first
+    .slice(0, 3);                                                       // only keep the top 3
 }
