@@ -1,11 +1,9 @@
 import { findClosestMatches } from "@/lib/erp/fuzzyMatch";
 import type { Product } from "@/types";
 
-/* Turns a raw fuzzy-match result into something buyer-facing.
-findClosestMatches only returns data (products + scores) - this is where
-that data becomes a plain-English message, same tone as buyerErrorMessage
-in errorMessages.ts. No "score" or internal wording ever reaches this
-message, only product names the buyer would recognize. */
+/* Turns a raw fuzzy-match result into something buyer-facing. findClosestMatches only returns data (products + scores),
+this is where that data becomes a plain-English message, same tone as buyerErrorMessage in errorMessages.ts. No "score" 
+or internal wording ever reaches this message, only product names the buyer would recognize. */
 export function suggestAlternatives(rawText: string): {
   suggestions: { product: Product; score: number }[];
   message: string;
