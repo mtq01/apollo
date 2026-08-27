@@ -1,8 +1,5 @@
 import { Anthropic } from "@anthropic-ai/sdk";
-import {
-  record_items,
-  recordItemsSchema,
-} from "@/lib/tools/recordItemsTool";
+import { record_items, recordItemsSchema } from "@/lib/tools/recordItemsTool";
 import { get_order_history } from "@/lib/tools/getOrderHistoryTool";
 
 import { getOrderHistory } from "@/lib/erp/order";
@@ -10,10 +7,7 @@ import type { UserContext } from "@/types";
 
 const anthropic = new Anthropic();
 
-export async function parseOrder(
-  text: string,
-  account: UserContext,
-) {
+export async function parseOrder(text: string, account: UserContext) {
   const messages: Anthropic.MessageParam[] = [
     {
       role: "user",
@@ -28,6 +22,12 @@ export async function parseOrder(
     const message = await anthropic.messages.create({
       model: "claude-haiku-4-5",
       max_tokens: 1024,
+      /* temperature controls how random Claude's answers are. 0 means "always pick the most likely answer" instead of varying between calls.
+        we need this here because without it, the same typed text (like "kabord") could get parsed differently each time. sometimes Claude
+        would silently "correct" it to "keyboard" in productGuess.name, other times it wouldn't. that made lookupProduct's exact-match check
+        inconsistent. same input, different result, just by chance. */
+      temperature: 0,
+
 
       tools: [record_items, get_order_history],
 
@@ -41,8 +41,7 @@ export async function parseOrder(
     // Check if Claude called get_order_history
     const historyToolUse = message.content.find(
       (block): block is Anthropic.ToolUseBlock =>
-        block.type === "tool_use" &&
-        block.name === "get_order_history",
+        block.type === "tool_use" && block.name === "get_order_history",
     );
 
     if (historyToolUse) {
@@ -78,8 +77,7 @@ export async function parseOrder(
     // Check if Claude called record_items
     const recordedItems = message.content.find(
       (block): block is Anthropic.ToolUseBlock =>
-        block.type === "tool_use" &&
-        block.name === "record_items",
+        block.type === "tool_use" && block.name === "record_items",
     );
 
     if (recordedItems) {

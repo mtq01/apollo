@@ -15,7 +15,7 @@ import type { Product } from "@/types";
 - A short SKU typo gets a tighter cutoff than a longer product name typo.
 - Never less than 1 (always allow at least a 1-character typo), never more than 3 (so we don't start suggesting wildly different products). */
 function getCutoff(query: string): number {
-  const relative = Math.ceil(query.length * 0.3); // 30% of the query's length
+  const relative = Math.ceil(query.length * 0.4); // 40% of the query's length
   return Math.min(3, Math.max(1, relative));
 }
 
@@ -25,12 +25,23 @@ export function findClosestMatches(
   const normalizedQuery = query.toLowerCase().trim();
   const cutoff = getCutoff(normalizedQuery);
 
-  // for every product in the catalog, check the query against BOTH its name and its sku, and keep whichever one is the closer match.
+  // for every product in the catalog, check the query against its name, its sku,
+  // AND each individual word inside its name, and keep whichever is closest.
+  //
+  // why check individual words too: comparing "kabord" against the whole string
+  // "mechanical keyboard" gives a huge distance, since "mechanical " isn't in the
+  // query at all - even though "kabord" is a near-perfect typo of just "keyboard".
+  // checking each word separately lets a one-word typo match the one word it's
+  // actually close to, instead of being penalized for the rest of a multi-word name.
   const scored = (catalog as Product[]).map((product) => {
-    const nameDistance = distance(
-      normalizedQuery,
-      product.name.toLowerCase().trim(),
+    const normalizedName = product.name.toLowerCase().trim();
+    const nameWords = normalizedName.split(" ");
+
+    const nameDistance = Math.min(
+      distance(normalizedQuery, normalizedName),
+      ...nameWords.map((word) => distance(normalizedQuery, word)),
     );
+
     const skuDistance = distance(
       normalizedQuery,
       product.sku.toLowerCase().trim(),
