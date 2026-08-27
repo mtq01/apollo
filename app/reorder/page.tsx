@@ -6,11 +6,12 @@ import Loader from "@/components/Loader";
 import { CircleAlert, TriangleAlert } from "@/components/icons";
 import EmptyState from "@/components/EmptyState";
 import ErrorMessage from "@/components/ErrorMessage";
-import { ErrorType, ActivityEvent, ForcedFailure } from "@/types";
+import { ErrorType, ActivityEvent, ForcedFailure, Product } from "@/types";
 import { AccountContext } from "@/components/account/AccountContext";
 import DisplayActivity from "@/components/activity-log/ActivityLog";
 
 type QuoteRow = {
+  // fields for a normal, successfully matched product
   name: string;
   quantity: number | null;
   stock: number | "hidden" | "error" | ErrorType;
@@ -21,6 +22,12 @@ type QuoteRow = {
   warehouse?: string;
   calculatedAt?: string;
   events?: ActivityEvent[];
+
+  // fields for a row where we couldnt find a matching product:
+  status?: "unmatched";                                 // set only when nothing matched, tells the page which version of the row to show
+  rawText?: string;                                     // what the buyer actually typed, since we dont have a real product name
+  matchError?: ErrorType;                               // why it didnt match, plain english
+  suggestions?: { product: Product; score: number}[];   // cloe-guess products, so the buyer can pick one instead of a dead end
 };
 
 export default function Reorder() {
