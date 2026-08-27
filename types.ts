@@ -123,6 +123,13 @@ export interface QuoteResult {
   calculatedAt: string;                                             // when it was calculated
 }
 
+/* Two possible outcomes for one line item:
+
+"matched"   - found the exact product. quote has the full price/stock info.
+
+"unmatched" - didn't find an exact product. can ask "did you mean one of these?" instead of just saying "not found."
+            - suggestions can also be empty, sometimes nothing is close enough to guess.
+            - suggestions only shows up on "unmatched." if we found the product, there's nothing to guess. */
 export type LineItemResult =
   | { status: "matched"; quote: QuoteResult }
-  | { status: "unmatched"; rawText: string; matchError: ErrorType };
+  | { status: "unmatched"; rawText: string; matchError: ErrorType; suggestions?: { product: Product; score: number }[] };

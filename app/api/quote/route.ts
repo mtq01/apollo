@@ -6,6 +6,7 @@ import { cacheTag } from "next/cache";
 import { parseOrder } from "@/lib/agent/parseOrder";
 import { lookupProduct } from "@/lib/erp/productLookup";
 import { z } from "zod";
+import { suggestAlternatives } from "@/lib/agent/suggestAlternatives";
 
 // Creating a zod schema to validate the user input. we need to do this because
 // it is coming from an outside source and typescript cannot validate it at runtime
@@ -135,13 +136,14 @@ export async function POST(request: Request) {
      Not break (which exits the loop entirely), not return
     */
     if (!product) {
+    // no exact match in the catalog. get 2-3 close-guess suggestions and a plain-English message instead of just saying "not found."
+      const { suggestions, matchError } = suggestAlternatives(item.rawText);
+
       quotes.push({
-        name: item.rawText,
-        quantity: item.quantity,
-        stock: {
-          type: "not found",
-          message: "We couldn't find this in the catalog.",
-        } satisfies ErrorType,
+        status: "unmatched",      // no product found, different shape than a normal quote row
+        rawText: item.rawText,    // what the buyer actually types, since we dont have a real product name
+        matchError,               // the "did you mean X?" message from suggestAlternatives
+        suggestions,              // the actual close-guess products, so the UI can show them as options
       });
       continue;
     }

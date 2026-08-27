@@ -6,11 +6,12 @@ import Loader from "@/components/Loader";
 import { CircleAlert, TriangleAlert } from "@/components/icons";
 import EmptyState from "@/components/EmptyState";
 import ErrorMessage from "@/components/ErrorMessage";
-import { ErrorType, ActivityEvent, ForcedFailure } from "@/types";
+import { ErrorType, ActivityEvent, ForcedFailure, Product } from "@/types";
 import { AccountContext } from "@/components/account/AccountContext";
 import DisplayActivity from "@/components/activity-log/ActivityLog";
 
 type QuoteRow = {
+  // fields for a normal, successfully matched product
   name: string;
   quantity: number | null;
   stock: number | "hidden" | "error" | ErrorType;
@@ -21,6 +22,12 @@ type QuoteRow = {
   warehouse?: string;
   calculatedAt?: string;
   events?: ActivityEvent[];
+
+  // fields for a row where we couldnt find a matching product:
+  status?: "unmatched"; // set only when nothing matched, tells the page which version of the row to show
+  rawText?: string; // what the buyer actually typed, since we dont have a real product name
+  matchError?: ErrorType; // why it didnt match, plain english
+  suggestions?: { product: Product; score: number }[]; // cloe-guess products, so the buyer can pick one instead of a dead end
 };
 
 export default function Reorder() {
@@ -190,17 +197,34 @@ export default function Reorder() {
                   {results.map((row, index) => (
                     <tr key={index}>
                       <td>{row.sku ?? "—"}</td>
-                      <td>{row.name ?? "—"}</td>
+                      {/* Name column: show the real product name if we found one, otherwise
+                      fall back to exactly what the buyer typed, otherwise a dash. */}
+                      <td>{row.name ?? row.rawText ?? "—"}</td>
                       <td>{row.quantity ?? "—"}</td>
                       <td>
                         {row.price != null ? `${row.price.toFixed(2)}` : "—"}
                       </td>
                       <td>
-                        {/* { Stock can be one of three things, so we check them in order.
-                              Is it a number? Show the count.
-                              Is it the word "hidden"? This account isn't allowed to see it.
-                              Anything left over has to be an error. } */}
-                        {typeof row.stock === "number" ? (
+                        {/* Stock column can be a few different things, checked in order:
+                            - no match at all? show why, plus close-guess suggestions to pick from
+                            - a real stock number? show it
+                            - "hidden"? not allowed to see it
+                            - "error"? the stock check itself failed
+                            - anything else left over is a generic error */}
+                        {row.status === "unmatched" ? (
+                          <div className="text-red-900">
+                            <p>{row.matchError?.message}</p>
+                            {row.suggestions && row.suggestions.length > 0 && (
+                              <ul>
+                                {row.suggestions.map((match) => (
+                                  <li key={match.product.sku}>
+                                    {match.product.name}
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        ) : typeof row.stock === "number" ? (
                           <>
                             {row.stock}
                             {row.calculatedAt && (

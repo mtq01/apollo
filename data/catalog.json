@@ -1,55 +1,55 @@
 [
   {
-    "sku": "SKU-1001",
+    "sku": "PER-2284",
     "name": "Wireless Mouse",
     "basePrice": 29.99,
     "leadTime": 2,
     "warehouse": "Vancouver"
   },
   {
-    "sku": "SKU-1002",
+    "sku": "PER-5017",
     "name": "Mechanical Keyboard",
     "basePrice": 89.99,
     "leadTime": 5,
     "warehouse": "Toronto"
   },
   {
-    "sku": "SKU-1003",
+    "sku": "ACC-3391",
     "name": "USB-C Hub",
     "basePrice": 39.99,
     "leadTime": 3,
     "warehouse": "Calgary"
   },
   {
-    "sku": "SKU-1004",
+    "sku": "DSP-7742",
     "name": "27-inch Monitor",
     "basePrice": 249.99,
     "leadTime": 7,
     "warehouse": "Vancouver"
   },
   {
-    "sku": "SKU-1005",
+    "sku": "ACC-1856",
     "name": "Laptop Stand",
     "basePrice": 49.99,
     "leadTime": 4,
     "warehouse": "Montreal"
   },
   {
-    "sku": "SKU-1006",
+    "sku": "AUD-6203",
     "name": "Noise Cancelling Headphones",
     "basePrice": 179.99,
     "leadTime": 6,
     "warehouse": "Toronto"
   },
   {
-    "sku": "SKU-1007",
+    "sku": "PER-4478",
     "name": "Webcam",
     "basePrice": 69.99,
     "leadTime": 2,
     "warehouse": "Calgary"
   },
   {
-    "sku": "SKU-1008",
+    "sku": "STO-9915",
     "name": "Portable SSD",
     "basePrice": 119.99,
     "leadTime": 5,
