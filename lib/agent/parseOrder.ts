@@ -22,7 +22,7 @@ export async function parseOrder(text: string, account: UserContext) {
     const message = await anthropic.messages.create({
       model: "claude-haiku-4-5",
       max_tokens: 1024,
-      /* temperature controls how random Claude's answers are. 0 means "always pick the most likely answer" instead of varying between calls.
+      /* temperature controls how random Claude's answers are. 0 means "always pick the most likely answer" instead of varying between calls,
         we need this here because without it, the same typed text (like "kabord") could get parsed differently each time. sometimes Claude
         would silently "correct" it to "keyboard" in productGuess.name, other times it wouldn't. that made lookupProduct's exact-match check
         inconsistent. same input, different result, just by chance. */
