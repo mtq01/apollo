@@ -4,11 +4,11 @@
     "accountId": 1,
     "items": [
       {
-        "sku": "SKU-1001",
+        "sku": "PER-2284",
         "quantity": 2
       },
       {
-        "sku": "SKU-1004",
+        "sku": "DSP-7742",
         "quantity": 1
       }
     ],
@@ -19,7 +19,7 @@
     "accountId": 1,
     "items": [
       {
-        "sku": "SKU-1008",
+        "sku": "STO-9915",
         "quantity": 1
       }
     ],
@@ -30,11 +30,11 @@
     "accountId": 1,
     "items": [
       {
-        "sku": "SKU-1002",
+        "sku": "PER-5017",
         "quantity": 1
       },
       {
-        "sku": "SKU-1001",
+        "sku": "PER-2284",
         "quantity": 3
       }
     ],
@@ -45,11 +45,11 @@
     "accountId": 2,
     "items": [
       {
-        "sku": "SKU-1002",
+        "sku": "PER-5017",
         "quantity": 5
       },
       {
-        "sku": "SKU-1006",
+        "sku": "AUD-6203",
         "quantity": 5
       }
     ],
@@ -60,7 +60,7 @@
     "accountId": 2,
     "items": [
       {
-        "sku": "SKU-1006",
+        "sku": "AUD-6203",
         "quantity": 2
       }
     ],
@@ -71,11 +71,11 @@
     "accountId": 3,
     "items": [
       {
-        "sku": "SKU-1003",
+        "sku": "ACC-3391",
         "quantity": 4
       },
       {
-        "sku": "SKU-1007",
+        "sku": "PER-4478",
         "quantity": 2
       }
     ],
@@ -86,7 +86,7 @@
     "accountId": 3,
     "items": [
       {
-        "sku": "SKU-1003",
+        "sku": "ACC-3391",
         "quantity": 2
       }
     ],
