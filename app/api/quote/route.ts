@@ -136,14 +136,17 @@ export async function POST(request: Request) {
      Not break (which exits the loop entirely), not return
     */
     if (!product) {
-    // no exact match in the catalog. get 2-3 close-guess suggestions and a plain-English message instead of just saying "not found."
-      const { suggestions, matchError } = suggestAlternatives(item.rawText);
+      // no exact match in the catalog. get 2-3 close-guess suggestions and a plain-English message instead of just saying "not found."
+      const { suggestions, matchError } = suggestAlternatives(
+        item.productGuess.name ?? item.rawText,
+      );
 
       quotes.push({
-        status: "unmatched",      // no product found, different shape than a normal quote row
-        rawText: item.rawText,    // what the buyer actually types, since we dont have a real product name
-        matchError,               // the "did you mean X?" message from suggestAlternatives
-        suggestions,              // the actual close-guess products, so the UI can show them as options
+        status: "unmatched", // no product found, different shape than a normal quote row
+        rawText: item.rawText, // what the buyer actually types, since we dont have a real product name
+        matchError, // the "did you mean X?" message from suggestAlternatives
+        suggestions, // the actual close-guess products, so the UI can show them as options
+        quantity: item.quantity,
       });
       continue;
     }

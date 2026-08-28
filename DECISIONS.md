@@ -119,3 +119,33 @@ write it in the following format:
 - [x] **DECISION**: The cutoff (how different a guess is allowed to be before we stop suggesting it) started at 30% of the typed text's length, but real testing showed it was too strict - "kabord" for "keyboard" was getting rejected. Raised it to 40%. Re-tested every typo case plus a nonsense input ("banana") afterward to confirm it didn't start showing bad suggestions.
 - [x] **DECISION**: Set `temperature: 0` on the Claude call in `parseOrder.ts`. Why: without it, Claude could read the exact same typo differently across identical requests - sometimes silently "fixing" it to the real product name before our code ever saw it, sometimes not. That made results inconsistent for the same input, for no visible reason. `temperature: 0` makes Claude answer the same way every time.
 - [x] **DECISION**: Changed `tool_choice` from `"auto"` to `"any"` on the same Claude call. Separate bug, found the day before: Claude could sometimes respond without calling either tool at all, which `parseOrder.ts` had no handling for beyond a generic thrown error. `"any"` forces Claude to always call one of the two tools.
+
+## August 27, 2026 - Open for the team (raised by Track A)
+
+> Found while reviewing the Day 11 build before starting Day 12/13. Not a bug in the fuzzy-match work - that behaves correctly. This is a question about how much the parse step should be allowed to change on the buyer's behalf. Nothing has been changed in code; raising it here so everyone sees it on pull.
+
+- [ ] **TODO**: **Claude silently corrects misspelled product names, and the buyer is never told.** `record_items` rewrites an obvious typo into a real product name before our code sees it. Measured on the running app:
+
+  ```
+  "2 wireless mise"  ->  productGuess.name: "wireless mouse"   exact catalog match, full priced quote
+  "2 wireless mice"  ->  productGuess.name: "wireless mice"    no match, falls through to fuzzy suggestions
+  ```
+
+  The first one returns a finished quote for Wireless Mouse x2 with no indication the buyer's words were changed. A quote commits real money to a product they did not type. The proposal is that a correction should surface as "did you mean" rather than a silent substitution.
+
+  Note this is *not* fixed by the `temperature: 0` decision above. That made the correction happen consistently instead of randomly - it did not make it visible.
+
+- [ ] **TODO**: **`confidence` cannot carry this signal, so a new field is needed.** The obvious cheap fix is to branch on `confidence`, but it grades how many attributes the buyer supplied, not whether Claude altered their words. Measured the same day:
+
+  ```
+  "2 wireless mise"   (corrected)     confidence: medium
+  "2 wireless mouse"  (clean input)   confidence: low
+  ```
+
+  The corrected input scored *higher* than the clean one. `note` does contain the fact - "Buyer wrote 'mise' which appears to be a misspelling of 'mouse'" - but it is free prose, so branching on it means string-matching for the word "misspelling", which breaks the first time Claude words it differently. Neither field is read by `route.ts` today.
+
+  Proposed shape: a structured `correctedFrom: string | null` on each item in `lib/tools/recordItemsTool.ts` - added to both the JSON schema and `recordItemsSchema` - holding the buyer's original wording when Claude changed it, null when it used their words as typed. That gives `route.ts` something it can actually branch on.
+
+- [ ] **TODO**: **Open UX call: hard or soft.** *Hard* - a corrected item becomes an unmatched row the buyer has to confirm, same as a fuzzy miss. Safest, but typos are the normal case, so every one becomes an extra click. *Soft* - still quote it, but mark the row ("Wireless Mouse - you typed 'mise'"). Soft looks like the better fit today because this screen produces a quote, not an order, so the buyer sees the substitution before committing to anything. That should flip to hard if this screen ever places the order directly. Same field powers either one; the difference is only what `route.ts` does with a non-null `correctedFrom`.
+
+- [ ] **TODO**: **Related quirk worth deciding at the same time: a correctly spelled word can fail where a typo succeeds.** `"wireless mice"` is valid English - the plural of mouse - so Claude leaves it alone, and `lookupProduct` handles plurals with `.replace(/s$/, "")`, which does nothing for mice/mouse. So the misspelled input gets a clean quote and the correctly spelled one gets a "did you mean". Same applies to boxes/box, knives/knife, feet/foot. Either match on `productGuess.attributes` alongside the name, or accept it and let the fuzzy suggestion handle it.
