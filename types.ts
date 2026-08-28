@@ -85,12 +85,7 @@ export interface AccountProductParams {
 
 /* used for logging a short, readable msg history of what action was taken.
 [example]: the 'getQuoteForProduct' function in 'productQuote.ts' will log the product quote & time it took place. */
-export type ActivityCategory =
-  | "price"
-  | "stock"
-  | "error"
-  | "access"
-  | "order";
+export type ActivityCategory = "price" | "stock" | "error" | "access" | "order";
 
 export interface ActivityEvent {
   id: string;
@@ -112,15 +107,15 @@ export interface Order {
 
 // shape of the final result this function returns
 export interface QuoteResult {
-  sku: string;                                                      // product identifier
-  price: number;                                                    // final price after any discount
-  stock: number | "hidden" | "error";                               // real stock count, or "hidden" if not allowed to see it. error = stock check failed, see 'stockError'
-  stockLastUpdated: string | "hidden" | "error";                    // when stock was checked, or "hidden"
-  stockError?: ErrorType;                                           // present only when: stock === "error"
-  leadTime: number;                                                 // days until product ships
-  warehouse: string | "hidden";                                     // ship-from warehouse, or "hidden"
-  events: ActivityEvent[];                                          // log of what happened while building this quote
-  calculatedAt: string;                                             // when it was calculated
+  sku: string; // product identifier
+  price: number; // final price after any discount
+  stock: number | "hidden" | "error"; // real stock count, or "hidden" if not allowed to see it. error = stock check failed, see 'stockError'
+  stockLastUpdated: string | "hidden" | "error"; // when stock was checked, or "hidden"
+  stockError?: ErrorType; // present only when: stock === "error"
+  leadTime: number; // days until product ships
+  warehouse: string | "hidden"; // ship-from warehouse, or "hidden"
+  events: ActivityEvent[]; // log of what happened while building this quote
+  calculatedAt: string; // when it was calculated
 }
 
 /* Two possible outcomes for one line item:
@@ -132,4 +127,42 @@ export interface QuoteResult {
             - suggestions only shows up on "unmatched." if we found the product, there's nothing to guess. */
 export type LineItemResult =
   | { status: "matched"; quote: QuoteResult }
-  | { status: "unmatched"; rawText: string; matchError: ErrorType; suggestions?: { product: Product; score: number }[] };
+  | {
+      status: "unmatched";
+      rawText: string;
+      matchError: ErrorType;
+      suggestions?: { product: Product; score: number }[];
+    };
+
+export type InvoiceField = "discount" | "internalCost";
+
+export interface Invoice {
+  id: string;
+  accountId: number;
+  items: { sku: string; quantity: number; price: number }[];
+  totalAmount: number;
+  discount: number;
+  internalCost: number;
+  restrictedFields: InvoiceField[];
+  timestamp: string;
+}
+
+export interface InvoiceRequest {
+  invoiceId: string;
+  accountId: number;
+}
+// The shape of the result the user will be able to see, which hides certain fields depending on the account's role.
+export interface VisibleInvoice {
+  id: string;
+  accountId: number;
+  items: { sku: string; quantity: number; price: number }[];
+  totalAmount: number;
+  discount: number | "hidden";
+  internalCost: number | "hidden";
+  timestamp: string;
+}
+
+export interface InvoiceResponse {
+  invoice: VisibleInvoice | null;
+  error?: ErrorType;
+}

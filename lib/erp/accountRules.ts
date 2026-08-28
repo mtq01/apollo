@@ -1,6 +1,5 @@
 import type { UserContext, Product } from "../../types";
 
-
 /* [calculatePriceParams]: defines the TYPE (shape for our data). 
 
   - It says "anything of this type must be an object with an 'account' property of type 'UserContext',
@@ -25,7 +24,10 @@ interface AccountProductParams {
   product: Product;
 }
 
-export function calculatePrice({ account, product }: AccountProductParams): number {
+export function calculatePrice({
+  account,
+  product,
+}: AccountProductParams): number {
   const CONTRACT_DISCOUNT = 0.9; // contract accounts get 10% off
 
   if (account.accountType === "contract") {
@@ -34,7 +36,6 @@ export function calculatePrice({ account, product }: AccountProductParams): numb
 
   return product.basePrice;
 }
-
 
 // Decide whether an account can see a product's stock numbers at all.
 export function seeStock({ account, product }: AccountProductParams): boolean {
@@ -55,9 +56,11 @@ export function seeStock({ account, product }: AccountProductParams): boolean {
   }
 }
 
-
 // Decide whether an account can see which warehouse a product ships from.
-export function accessWarehouse({ account, product }: AccountProductParams): boolean {
+export function accessWarehouse({
+  account,
+  product,
+}: AccountProductParams): boolean {
   switch (account.role) {
     case "admin":
       return true;
@@ -75,6 +78,3 @@ export function accessWarehouse({ account, product }: AccountProductParams): boo
       return false;
   }
 }
-
-
-

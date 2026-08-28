@@ -1,0 +1,117 @@
+[
+  {
+    "id": "inv-1001",
+    "accountId": 1,
+    "items": [
+      {
+        "sku": "PER-2284",
+        "quantity": 2,
+        "price": 29.99
+      },
+      {
+        "sku": "DSP-7742",
+        "quantity": 1,
+        "price": 249.99
+      }
+    ],
+    "totalAmount": 309.97,
+    "discount": 0,
+    "internalCost": 192.5,
+    "restrictedFields": [
+      "discount",
+      "internalCost"
+    ],
+    "timestamp": "2026-06-11T10:20:00Z"
+  },
+  {
+    "id": "inv-1002",
+    "accountId": 2,
+    "items": [
+      {
+        "sku": "PER-5017",
+        "quantity": 5,
+        "price": 80.99
+      },
+      {
+        "sku": "AUD-6203",
+        "quantity": 5,
+        "price": 161.99
+      }
+    ],
+    "totalAmount": 1214.9,
+    "discount": 135,
+    "internalCost": 741,
+    "restrictedFields": [
+      "discount",
+      "internalCost"
+    ],
+    "timestamp": "2026-07-18T14:05:00Z"
+  },
+  {
+    "id": "inv-1003",
+    "accountId": 3,
+    "items": [
+      {
+        "sku": "ACC-3391",
+        "quantity": 3,
+        "price": 39.99
+      }
+    ],
+    "totalAmount": 119.97,
+    "discount": 0,
+    "internalCost": 73.2,
+    "restrictedFields": [
+      "discount",
+      "internalCost"
+    ],
+    "timestamp": "2026-07-25T09:45:00Z"
+  },
+  {
+    "id": "inv-1004",
+    "accountId": 2,
+    "items": [
+      {
+        "sku": "AUD-6203",
+        "quantity": 2,
+        "price": 161.99
+      }
+    ],
+    "totalAmount": 323.98,
+    "discount": 36,
+    "internalCost": 197.6,
+    "restrictedFields": [
+      "discount",
+      "internalCost"
+    ],
+    "timestamp": "2026-08-04T11:30:00Z"
+  },
+  {
+    "id": "inv-1005",
+    "accountId": 1,
+    "items": [
+      {
+        "sku": "STO-9915",
+        "quantity": 1,
+        "price": 119.99
+      },
+      {
+        "sku": "ACC-1856",
+        "quantity": 2,
+        "price": 49.99
+      },
+      {
+        "sku": "PER-4478",
+        "quantity": 1,
+        "price": 69.99
+      }
+    ],
+    "totalAmount": 289.96,
+    "discount": 0,
+    "internalCost": 180.75,
+    "restrictedFields": [
+      "discount",
+      "internalCost"
+    ],
+    "timestamp": "2026-08-15T16:10:00Z"
+  }
+]
