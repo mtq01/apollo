@@ -1,23 +1,37 @@
-// This page checks account, redirects to login page or dashboard page.
+import { AppSidebar } from "@/components/app-sidebar"
+import { ChartAreaInteractive } from "@/components/chart-area-interactive"
+import { DataTable } from "@/components/data-table"
+import { SectionCards } from "@/components/section-cards"
+import { SiteHeader } from "@/components/site-header"
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 
-export default function Home() {
+import data from "@/data/data.json";
+
+export default function Page() {
   return (
-    <div className="flex flex-col gap-6 p-16">
-      <h2 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black">
-        Home Page
-      </h2>
-      <h1 className="max-w-xs text-xl font-semibold leading-10 tracking-tight text-black">
-        This page will eventually check account state and redirect to{" "}
-        <strong>/login</strong> or <strong>/dashboard</strong>
-      </h1>
-      <p>
-        It will{" "}
-        <strong>
-          <em>not</em>
-        </strong>{" "}
-        display anything, and will only run the check to route the user where
-        they need to be.
-      </p>
-    </div>
-  );
+    <SidebarProvider
+      style={
+        {
+          "--sidebar-width": "calc(var(--spacing) * 72)",
+          "--header-height": "calc(var(--spacing) * 12)",
+        } as React.CSSProperties
+      }
+    >
+      <AppSidebar variant="inset" />
+      <SidebarInset>
+        <SiteHeader />
+        <div className="flex flex-1 flex-col">
+          <div className="@container/main flex flex-1 flex-col gap-2">
+            <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
+              <SectionCards />
+              <div className="px-4 lg:px-6">
+                <ChartAreaInteractive />
+              </div>
+              <DataTable data={data} />
+            </div>
+          </div>
+        </div>
+      </SidebarInset>
+    </SidebarProvider>
+  )
 }

@@ -18,7 +18,7 @@ import {
   TableRow,
   TableHead,
   TableCell,
-} from "@/components/ui/Table";
+} from "@/components/ui/table";
 import { AlertTriangleIcon } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
@@ -148,7 +148,7 @@ export default function Reorder() {
           className="flex flex-col gap-4 w-full mb-8 "
         >
           <label>
-            <span className="sr-only">Paste your order</span>
+            <span className="sr-only">Paste a previous PO#, SKU numbers, or a list of products that you're looking for.</span>
 
             <Textarea
               placeholder="paste SKU's, an invoice or a list of products here"

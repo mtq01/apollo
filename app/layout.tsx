@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import Nav from "@/components/Nav";
 import { Roboto } from "next/font/google";
-import Header from "@/components/Header";
 import { AccountProvider } from "@/components/account/AccountProvider";
+import { AppSidebar } from "@/components/app-sidebar";
+import { SiteHeader } from "@/components/site-header";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
 // fonts
 const geistSans = Geist({
@@ -39,13 +40,22 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} ${roboto.variable} h-full antialiased`}
     >
-      <body className="flex flex-row">
+      <body>
         <AccountProvider>
-          <Nav />
-          <div className="min-h-dvh flex flex-col flex-1 min-w-0">
-            <Header />
-            <main className="flex-1">{children}</main>
-          </div>
+          <SidebarProvider
+            style={
+              {
+                "--sidebar-width": "calc(var(--spacing) * 72)",
+                "--header-height": "calc(var(--spacing) * 12)",
+              } as React.CSSProperties
+            }
+          >
+            <AppSidebar variant="inset" />
+            <SidebarInset>
+              <SiteHeader />
+              <main className="flex-1">{children}</main>
+            </SidebarInset>
+          </SidebarProvider>
         </AccountProvider>
       </body>
     </html>
