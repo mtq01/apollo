@@ -8,6 +8,7 @@ import ErrorMessage from "@/components/ErrorMessage";
 import { ErrorType, ActivityEvent, ForcedFailure, Product } from "@/types";
 import { AccountContext } from "@/components/account/AccountContext";
 import DisplayActivity from "@/components/activity-log/ActivityLog";
+import { buyerErrorMessage } from "@/lib/erp/errorMessages";
 // shad components
 import {
   TableCaption,
@@ -19,7 +20,7 @@ import {
   TableCell,
 } from "@/components/ui/Table";
 import { AlertTriangleIcon } from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   NativeSelect,
   NativeSelectOption,
@@ -60,6 +61,7 @@ export default function Reorder() {
 
   // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/flatMap
   const activity = results?.flatMap((row) => row.events ?? []) ?? [];
+  const failedRows = results?.filter((row) => row.stock === "error") ?? [];
 
   // Function to get quote from the server
   const getQuote = async () => {
@@ -206,15 +208,29 @@ export default function Reorder() {
         ) : (
           <>
             {/* Alert Component */}
-            <Alert className="max-w bg-orange-200 text-black dark:border-amber-900 my-3 dark:bg-apollo-dark dark:text-apollo-light">
-              <AlertTriangleIcon />
-              <AlertTitle className="font-bold">
-                Stock data may be a few hours old for SKU-4410
-              </AlertTitle>
-              <AlertDescription className="text-color-light">
-                Confirm before ordering.
-              </AlertDescription>
-            </Alert>
+            {failedRows.length > 0 ? (
+              <Alert
+                variant="destructive"
+                className="max-w my-3 border-red-600 bg-red-50"
+              >
+                <AlertTriangleIcon />
+                <AlertDescription>
+                  {failedRows[0].name}:{" "}
+                  {failedRows[0].stockError
+                    ? buyerErrorMessage(failedRows[0].stockError)
+                    : "Something went wrong checking stock."}
+                  {failedRows.length > 1 &&
+                    ` (${failedRows.length} items affected)`}
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <Alert className="max-w bg-orange-200 text-black dark:border-amber-900 my-3 dark:bg-apollo-dark dark:text-apollo-light">
+                <AlertTriangleIcon />
+                <AlertDescription className="text-color-light">
+                  Stock data may be a few hours old, please confirm before ordering.
+                </AlertDescription>
+              </Alert>
+            )}
 
             {/* Table Component */}
             <Table>
@@ -285,11 +301,14 @@ export default function Reorder() {
                         "—"
                       ) : row.stock === "error" ? (
                         <span className="text-red-900">
-                          {row.stockError?.message ?? "Stock check failed."}
+                          {row.stockError
+                            ? buyerErrorMessage(row.stockError)
+                            : "Stock check failed."
+                      }
                         </span>
                       ) : (
                         <span className="text-red-900">
-                          {row.stock.message}
+                          {buyerErrorMessage(row.stock)}
                         </span>
                       )}
                     </TableCell>

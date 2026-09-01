@@ -1,6 +1,7 @@
 // import ErrorType object (ErrorType is a Discriminated Union)
 import { ErrorType } from "../types";
 import { CircleAlert } from "@/components/icons";
+import { buyerErrorMessage } from "@/lib/erp/errorMessages";
 
 /* 
 [Documentation]
@@ -16,47 +17,12 @@ import { CircleAlert } from "@/components/icons";
     restricted, invalid input). Each with its own msg
   - This component only displays errors, it does not create or catch them.
 
-
-[Switch Statement]
-  - error.type is the discriminant. Its the field that tells us which of the 
-    4 ErrorType shapes we're holding.
-  - Every variant shares the "type" field but with a different fixed value,
-    which is what makes it safe to check with a switch.
-  - The switch checks 'error.type' against each case, one at a time, and runs
-    the matching case (first match wins, similar to if/else)
-  - Each case returns its own JSX immediately.
 */
 
 // destructures 'error' out of the props object & tells TypeScript that the props object 'error' field must be typed as ErrorType
 function DisplayError({ error }: { error: ErrorType }) {
-  // checks error.type against each case, and once it finds a match, and sets the message to that specific error message.
-  let message: string;
-  switch (error.type) {
-    case "not found":
-      message = error.message;
-      // break just means stop, exit the switch if theres a match
-      break;
-
-    case "timeout":
-      message = error.message;
-      break;
-
-    case "restricted":
-      message = error.message;
-      break;
-
-    case "invalid input":
-      message = error.message;
-      break;
-
-    case "request failed":
-      message = error.message;
-      break;
-
-    // if no cases match, return a default error. its a safety net that shouldnt normally trigger.
-    default:
-      message = "An unexpected error occurred.";
-  }
+  
+const message = buyerErrorMessage(error);
 
   return (
     <div
