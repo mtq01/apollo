@@ -4,20 +4,26 @@
     "name": "Alex",
     "role": "admin",
     "accountType": "standard",
-    "assignedWarehouse": "Vancouver"
-  },
+    "assignedWarehouse": "Vancouver",
+    "avatarUrl": "https://github.com/alex-monro.png"
+  }
+  ,
   {
     "id": 2,
     "name": "Mahtab",
     "role": "manager",
     "accountType": "contract",
-    "assignedWarehouse": "Toronto"
-  },
+    "assignedWarehouse": "Toronto",
+    "avatarUrl": "https://github.com/mahtabsz-devdes.png"
+  }
+  ,
   {
     "id": 3,
     "name": "Mike",
     "role": "buyer",
     "accountType": "standard",
-    "assignedWarehouse": "Calgary"
+    "assignedWarehouse": "Calgary",
+    "avatarUrl": "https://github.com/mtq01.png"
+
   }
 ]

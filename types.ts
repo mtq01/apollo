@@ -37,6 +37,7 @@ export interface UserContext {
   role: Role;
   accountType: AccountType;
   assignedWarehouse: string; // which warehouse this account is assigned too, for shipping/inventory checks.
+  avatarUrl: string;          // the avatar associated with each account.
 }
 
 // One product from the catalog. This is static, unchanging data. Real-time info like stock comes from getERPStock instead, not from here.

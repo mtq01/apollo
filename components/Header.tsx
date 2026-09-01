@@ -4,6 +4,12 @@ import { useContext } from "react";
 import { accountList } from "@/components/account/AccountSelector";
 import { CircleUserRound } from "@/components/icons";
 import { AccountContext } from "./account/AccountContext";
+// shad native-select
+import {
+  NativeSelect,
+  NativeSelectOption,
+} from "@/components/ui/native-select";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 //https://react.dev/learn/passing-data-deeply-with-context#step-2-use-the-context
 
 const Header = () => {
@@ -12,20 +18,32 @@ const Header = () => {
   return (
     <header className="flex h-topbar flex-col items-center justify-center gap-4 bg-apollo-light px-4 sm:flex-row text-black sm:justify-end sm:px-16 border-b border-zinc-200">
       <div className="flex items-center gap-4">
-        <CircleUserRound size={32} aria-hidden="true" className="shrink-0" />
-        <select
+
+        {/* Avatar */}
+        <Avatar>
+          {account && (
+            <AvatarImage src={account.avatarUrl} alt={account.name} />
+          )}
+
+          <AvatarFallback>
+            {account ? account.name[0] : <CircleUserRound aria-hidden="true" />}
+          </AvatarFallback>
+        </Avatar>
+
+        {/* Select User Component */}
+        <NativeSelect
           value={accountId ?? ""}
           onChange={(e) =>
             setAccountId(e.target.value === "" ? null : Number(e.target.value))
           }
         >
-          <option value="">Select account</option>
+          <NativeSelectOption value="">Select Account</NativeSelectOption>
           {accountList.map((a) => (
-            <option key={a.id} value={a.id}>
+            <NativeSelectOption key={a.id} value={a.id}>
               {a.name}
-            </option>
+            </NativeSelectOption>
           ))}
-        </select>
+        </NativeSelect>
         <div>
           <p className="font-bold">{account?.name ?? "No account"}</p>
           <p className="text-sm">{account?.accountType ?? "—"}</p>
