@@ -77,7 +77,7 @@ export async function getQuoteForProduct({ account, product}: AccountProductPara
     stock = "error";
     stockLastUpdated = "error";
     stockError = mapStockErrorToReason(lastError);
-    addEvent(`Stock Check Failed: ${stockError.type} - ${product.name}`, "stock");
+    addEvent(`Stock check failed for ${product.name}: ${stockError.message}`, "stock");
     }   
   } else {
       // if unsuccessful (false)
