@@ -160,6 +160,7 @@ export interface VisibleInvoice {
   discount: number | "hidden";
   internalCost: number | "hidden";
   timestamp: string;
+  events: ActivityEvent[];
 }
 
 export interface InvoiceResponse {
