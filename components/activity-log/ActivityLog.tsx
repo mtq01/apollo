@@ -20,28 +20,47 @@
       React can't reliably tell items apart when the list changes. 
 */
 
-
 import { ActivityEvent } from "@/types";
-
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+  AlertAction,
+} from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 
 // ActivityEvent[] = an array where every item must match the ActivityEvent shape. (Our logData has 3 activities to log, so 3 objects to store.)
 // its required bcuz events.map() only works on arrays, not single objects.
 function DisplayActivity({ events }: { events: ActivityEvent[] }) {
   return (
-    <ol className="flex flex-col gap-12">
-      {/* JSX elements directly inside a map() call ALWAYS need keys!!! */}
-      {events.map((activity) => (
-        <li key={activity.id}>
-          <p className="font-semibold text-lg">{activity.message}</p>
-          <p className="text-sm text-gray-800">
-            {new Date(activity.timestamp).toLocaleTimeString([], {
-              hour: "numeric",
-              minute: "2-digit",
-            })}
-          </p>
-        </li>
-      ))}
-    </ol>
+    <>
+      {events.map((activity) => {
+        const date = new Date(activity.timestamp);
+        return (
+          <Alert key={activity.id} className="max-w-md">
+            <AlertTitle className="tracking-normal font-bold text-xs">
+              {date.toLocaleDateString([], {
+                month: "long",
+                day: "numeric",
+                year: "numeric",
+              })}
+            </AlertTitle>
+            <AlertDescription className="tracking-normal">
+              {activity.message}
+            </AlertDescription>
+            <AlertAction>
+              <Badge variant="outline">
+                {" "}
+                {date.toLocaleTimeString([], {
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}
+              </Badge>
+            </AlertAction>
+          </Alert>
+        );
+      })}
+    </>
   );
 }
 
