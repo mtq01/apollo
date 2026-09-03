@@ -13,6 +13,7 @@ import ErrorMessage from "@/components/ErrorMessage";
 import { buyerErrorMessage } from "@/lib/erp/errorMessages";
 import { ErrorType, ActivityEvent, ForcedFailure, Product } from "@/types";
 import { AccountContext } from "@/components/account/AccountContext";
+import { ActivityContext } from "@/components/activity-log/ActivityContext";
 import { DraftOrderContext, type DraftLine, } from "@/components/draft-order/DraftOrderContext";
 import { DraftOrder } from "@/components/draft-order/DraftOrder";
 import { NativeSelect, NativeSelectOption, } from "@/components/ui/native-select";
@@ -84,6 +85,7 @@ function itemCountLabel(count: number) {
 export default function Reorder() {
   const { accountId } = useContext(AccountContext);
   const { addLines } = useContext(DraftOrderContext);
+  const { logEvent } = useContext(ActivityContext);
 
   const [isLoading, setLoading] = useState(false);
   const [error, setError] = useState<ErrorType | null>(null);
@@ -114,12 +116,12 @@ export default function Reorder() {
       const data = await response.json().catch(() => null);
 
       if (!response.ok) {
-        setError(
-          data?.error ?? {
-            type: "request failed",
-            message: "Couldn't get a quote. Please try again later.",
-          },
-        );
+        const failure: ErrorType = data?.error ?? {
+          type: "request failed",
+          message: "Couldn't get a quote. Please try again later.",
+        };
+        setError(failure);
+        logEvent(failure.message, "error");
         return;
       }
 
@@ -179,6 +181,14 @@ export default function Reorder() {
         );
       }
 
+      if (leftover.length > 0) {
+        const word = leftover.length === 1 ? "item" : "items";
+        logEvent(
+          `${leftover.length} ${word} could not be added to the cart`,
+          "error",
+        );
+      }
+
       setUnmatched(leftover);
       setText("");
     } catch {
@@ -186,6 +196,7 @@ export default function Reorder() {
         type: "request failed",
         message: "Couldn't reach the server. Check your connection.",
       });
+      logEvent("Could not reach the server", "error");
     } finally {
       setLoading(false);
     }

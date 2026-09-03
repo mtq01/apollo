@@ -6,13 +6,15 @@
 
 import { createContext } from "react";
 
-import { ActivityEvent } from "@/types";
+import { ActivityCategory, ActivityEvent } from "@/types";
 
 type ActivityContextValue = {
   events: ActivityEvent[];
-  setEvents: (events: ActivityEvent[]) => void;
-  // `open` is the docked panel on wide screens. `openMobile` is the slide-in
-  // sheet on narrow screens. `toggle` flips whichever one applies.
+  // add one line to log
+  logEvent: (message: string, category?: ActivityCategory) => void;
+  // wipe the log (example... after the order is placed)
+  clearLog: () => void;
+  // `open` is the docked panel on wide screens. `openMobile` is the slide-in sheet on narrow screens. `toggle` flips whichever one applies.
   open: boolean;
   openMobile: boolean;
   setOpenMobile: (open: boolean) => void;
@@ -22,7 +24,8 @@ type ActivityContextValue = {
 // Default value. The real one comes from ActivityProvider.
 export const ActivityContext = createContext<ActivityContextValue>({
   events: [],
-  setEvents: () => {},
+  logEvent: () => {},
+  clearLog: () => {},
   open: true,
   openMobile: false,
   setOpenMobile: () => {},
