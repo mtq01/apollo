@@ -6,6 +6,7 @@ import { AccountContext } from "@/components/account/AccountContext";
 import { ActivityContext } from "@/components/activity-log/ActivityContext";
 import { DraftOrderContext } from "@/components/draft-order/DraftOrderContext";
 import { buyerErrorMessage } from "@/lib/erp/errorMessages";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -17,7 +18,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { ActivityEvent, ErrorType } from "@/types";
+import { AlertTriangleIcon } from "lucide-react";
+import type { ActivityEvent, ErrorType, ForcedFailure } from "@/types";
 
 // one priced row back from /api/quote/items, keyed by sku for lookup
 type PricedRow = {
@@ -47,7 +49,11 @@ function formatCheckedAt(iso: string) {
 
 const REPRICE_DELAY = 500;
 
-export function DraftOrder() {
+export function DraftOrder({
+  forceFailure,
+}: {
+  forceFailure?: ForcedFailure | null;
+}) {
   const { accountId } = useContext(AccountContext);
   const { setEvents } = useContext(ActivityContext);
   const { lines, setQuantity, removeLine, clear } =
@@ -84,6 +90,7 @@ export function DraftOrder() {
         body: JSON.stringify({
           accountId,
           items: lines.map((l) => ({ sku: l.sku, quantity: l.quantity })),
+          forceFailure: forceFailure ?? undefined,
         }),
         signal: ac.signal,
       });
@@ -107,7 +114,7 @@ export function DraftOrder() {
     } finally {
       if (!ac.signal.aborted) setPricing(false);
     }
-  }, [accountId, lines, setEvents]);
+  }, [accountId, lines, forceFailure, setEvents]);
 
   useEffect(() => {
     const t = setTimeout(reprice, REPRICE_DELAY);
@@ -169,6 +176,15 @@ export function DraftOrder() {
     return typeof ic === "number" ? sum + ic * l.quantity : sum;
   }, 0);
 
+  // lines whose ERP stock check failed (timeout, not found, ...)
+  const failedLines = lines.filter((l) => {
+    const row = priced[l.sku];
+    return row?.stock === "error" || row?.stockError != null;
+  });
+  const firstFailedError = failedLines[0]
+    ? priced[failedLines[0].sku]?.stockError
+    : undefined;
+
   if (lines.length === 0) {
     return (
       <section className="mb-8 w-full max-w-4xl">
@@ -205,6 +221,30 @@ export function DraftOrder() {
           Clear
         </button>
       </div>
+
+      {failedLines.length > 0 ? (
+        <Alert
+          variant="destructive"
+          className="my-3 border-red-600 bg-red-50"
+        >
+          <AlertTriangleIcon />
+          <AlertDescription>
+            {failedLines[0].productName}:{" "}
+            {firstFailedError
+              ? buyerErrorMessage(firstFailedError)
+              : "Something went wrong checking stock."}
+            {failedLines.length > 1 &&
+              ` (${failedLines.length} items affected)`}
+          </AlertDescription>
+        </Alert>
+      ) : (
+        <Alert className="my-3 border-amber-300 bg-orange-100 text-black">
+          <AlertTriangleIcon />
+          <AlertDescription>
+            Stock data may be a few hours old, please confirm before ordering.
+          </AlertDescription>
+        </Alert>
+      )}
 
       <Table>
         <TableHeader>

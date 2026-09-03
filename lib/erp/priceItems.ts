@@ -83,7 +83,10 @@ export async function priceItems(
       const quote = await getCachedQuote(account, product, forceFailure);
 
       if (quote.stockError?.type === "not found") {
+        // the catalog match succeeded; it's the ERP that couldn't confirm it.
+        // keep the sku so the draft can still show the row + its error.
         quotes.push({
+          sku: product.sku,
           name: item.rawText,
           quantity: item.quantity,
           stock: quote.stock,

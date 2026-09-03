@@ -4,6 +4,7 @@
 import { useContext, useEffect, useState } from "react";
 import Loader from "@/components/Loader";
 import ErrorMessage from "@/components/ErrorMessage";
+import { buyerErrorMessage } from "@/lib/erp/errorMessages";
 import {
   ErrorType,
   ActivityEvent,
@@ -317,7 +318,7 @@ export default function Reorder() {
         </NativeSelectOption>
       </NativeSelect>
 
-      <DraftOrder />
+      <DraftOrder forceFailure={forceFailure} />
 
       {isLoading && (
         <div className="flex w-full flex-col items-center gap-4 py-16">
@@ -341,9 +342,11 @@ export default function Reorder() {
                   {row.rawText ?? row.name ?? "Unknown item"}
                 </p>
                 <p className="text-sm text-gray-600">
-                  {row.matchError?.message ??
-                    row.stockError?.message ??
-                    "No match in the catalog."}
+                  {row.matchError
+                    ? row.matchError.message
+                    : row.stockError
+                      ? buyerErrorMessage(row.stockError)
+                      : "No match in the catalog."}
                 </p>
                 {row.suggestions && row.suggestions.length > 0 && (
                   <ul className="mt-2 flex flex-col gap-1">
