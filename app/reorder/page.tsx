@@ -5,7 +5,13 @@ import { useContext, useState } from "react";
 import Loader from "@/components/Loader";
 import EmptyState from "@/components/EmptyState";
 import ErrorMessage from "@/components/ErrorMessage";
-import { ErrorType, ActivityEvent, ForcedFailure, Product } from "@/types";
+import {
+  ErrorType,
+  ActivityEvent,
+  ForcedFailure,
+  Product,
+  VisibleInvoice,
+} from "@/types";
 import { AccountContext } from "@/components/account/AccountContext";
 import DisplayActivity from "@/components/activity-log/ActivityLog";
 import { buyerErrorMessage } from "@/lib/erp/errorMessages";
@@ -48,6 +54,18 @@ type QuoteRow = {
   suggestions?: { product: Product; score: number }[]; // cloe-guess products, so the buyer can pick one instead of a dead end
 };
 
+type QuoteResults = {
+  type: "quotes";
+  quotes: QuoteRow[];
+};
+
+type InvoiceResults = {
+  type: "invoice";
+  invoice: VisibleInvoice;
+};
+
+type Results = QuoteResults | InvoiceResults;
+
 export default function Reorder() {
   // Create Loading State, Error State, Text State, and Results State
 
@@ -56,12 +74,18 @@ export default function Reorder() {
   const [isLoading, setLoading] = useState(false);
   const [error, setError] = useState<ErrorType | null>(null);
   const [text, setText] = useState("");
-  const [results, setResults] = useState<QuoteRow[] | null>(null);
+  const [results, setResults] = useState<Results | null>(null);
   const [forceFailure, setForceFailure] = useState<ForcedFailure | null>(null);
 
   // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/flatMap
-  const activity = results?.flatMap((row) => row.events ?? []) ?? [];
-  const failedRows = results?.filter((row) => row.stock === "error") ?? [];
+  const quoteResults = results?.type === "quotes" ? results.quotes : [];
+
+  const activity =
+    results?.type === "invoice"
+      ? results.invoice.events
+      : (results?.quotes.flatMap((row) => row.events ?? []) ?? []);
+
+  const failedRows = quoteResults.filter((row) => row.stock === "error");
 
   // Function to get quote from the server
   const getQuote = async () => {
@@ -200,7 +224,7 @@ export default function Reorder() {
               show you prices, stock and delivery times."
             />
           </div>
-        ) : results.length === 0 ? (
+        ) : results.type === "quotes" && results.quotes.length === 0 ? (
           <EmptyState
             title="No matching products found."
             message="Try a different search or check your input."
@@ -208,130 +232,183 @@ export default function Reorder() {
         ) : (
           <>
             {/* Alert Component */}
-            {failedRows.length > 0 ? (
-              <Alert
-                variant="destructive"
-                className="max-w my-3 border-red-600 bg-red-50"
-              >
-                <AlertTriangleIcon />
-                <AlertDescription>
-                  {failedRows[0].name}:{" "}
-                  {failedRows[0].stockError
-                    ? buyerErrorMessage(failedRows[0].stockError)
-                    : "Something went wrong checking stock."}
-                  {failedRows.length > 1 &&
-                    ` (${failedRows.length} items affected)`}
-                </AlertDescription>
-              </Alert>
+            {results.type === "invoice" ? (
+              <div className="w-full">
+                <h2 className="text-2xl font-semibold mb-4">
+                  Invoice {results.invoice.id}
+                </h2>
+
+                <Table>
+                  <TableCaption>Invoice Details</TableCaption>
+
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>SKU</TableHead>
+                      <TableHead>Quantity</TableHead>
+                      <TableHead>Price</TableHead>
+                    </TableRow>
+                  </TableHeader>
+
+                  <TableBody>
+                    {results.invoice.items.map((item) => (
+                      <TableRow key={item.sku}>
+                        <TableCell className="font-medium">
+                          {item.sku}
+                        </TableCell>
+
+                        <TableCell>{item.quantity}</TableCell>
+
+                        <TableCell>${item.price.toFixed(2)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+
+                <div className="mt-6 text-lg font-semibold">
+                  Total: ${results.invoice.totalAmount.toFixed(2)}
+                </div>
+
+                <div className="mt-4">
+                  <p>
+                    Discount:{" "}
+                    {results.invoice.discount === "hidden"
+                      ? "Restricted"
+                      : `$${results.invoice.discount.toFixed(2)}`}
+                  </p>
+
+                  <p>
+                    Internal Cost:{" "}
+                    {results.invoice.internalCost === "hidden"
+                      ? "Restricted"
+                      : `$${results.invoice.internalCost.toFixed(2)}`}
+                  </p>
+                </div>
+              </div>
             ) : (
-              <Alert className="max-w bg-orange-200 text-black dark:border-amber-900 my-3 dark:bg-apollo-dark dark:text-apollo-light">
-                <AlertTriangleIcon />
-                <AlertDescription className="text-color-light">
-                  Stock data may be a few hours old, please confirm before ordering.
-                </AlertDescription>
-              </Alert>
-            )}
+              <>
+                {/* Alert Component */}
+                {failedRows.length > 0 ? (
+                  <Alert
+                    variant="destructive"
+                    className="max-w my-3 border-red-600 bg-red-50"
+                  >
+                    <AlertTriangleIcon />
+                    <AlertDescription>
+                      {failedRows[0].name}:{" "}
+                      {failedRows[0].stockError
+                        ? buyerErrorMessage(failedRows[0].stockError)
+                        : "Something went wrong checking stock."}
+                      {failedRows.length > 1 &&
+                        ` (${failedRows.length} items affected)`}
+                    </AlertDescription>
+                  </Alert>
+                ) : (
+                  <Alert className="max-w bg-orange-200 text-black dark:border-amber-900 my-3 dark:bg-apollo-dark dark:text-apollo-light">
+                    <AlertTriangleIcon />
+                    <AlertDescription className="text-color-light">
+                      Stock data may be a few hours old, please confirm before
+                      ordering.
+                    </AlertDescription>
+                  </Alert>
+                )}
 
-            {/* Table Component */}
-            <Table>
-              <TableCaption>Quote Results</TableCaption>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>SKU</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Qty</TableHead>
-                  <TableHead>Price</TableHead>
-                  <TableHead>Stock</TableHead>
-                  <TableHead>Lead Time</TableHead>
-                  <TableHead>Warehouse</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {results.map((row, index) => (
-                  <TableRow key={index}>
-                    {/* Sku Cell */}
-                    <TableCell className="font-medium">
-                      {row.sku ?? "—"}
-                    </TableCell>
+                {/* Table Component */}
+                <Table>
+                  <TableCaption>Quote Results</TableCaption>
 
-                    {/* Name Cell */}
-                    <TableCell>{row.name ?? row.rawText ?? "—"}</TableCell>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>SKU</TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Qty</TableHead>
+                      <TableHead>Price</TableHead>
+                      <TableHead>Stock</TableHead>
+                      <TableHead>Lead Time</TableHead>
+                      <TableHead>Warehouse</TableHead>
+                    </TableRow>
+                  </TableHeader>
 
-                    {/* Quantity Cell */}
-                    <TableCell>{row.quantity ?? "—"}</TableCell>
+                  <TableBody>
+                    {results.quotes.map((row, index) => (
+                      <TableRow key={index}>
+                        <TableCell className="font-medium">
+                          {row.sku ?? "—"}
+                        </TableCell>
 
-                    {/* Price Cell */}
-                    <TableCell>
-                      {row.price != null ? `${row.price.toFixed(2)}` : "—"}
-                    </TableCell>
+                        <TableCell>{row.name ?? row.rawText ?? "—"}</TableCell>
 
-                    {/* Stock Cell */}
-                    <TableCell>
-                      {" "}
-                      {row.status === "unmatched" ? (
-                        <div className="text-red-900">
-                          <p>{row.matchError?.message}</p>
-                          {row.suggestions && row.suggestions.length > 0 && (
-                            <ul>
-                              {row.suggestions.map((match) => (
-                                <li key={match.product.sku}>
-                                  {match.product.name}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                      ) : typeof row.stock === "number" ? (
-                        <>
-                          {row.stock}
-                          {row.calculatedAt && (
-                            <div className="text-xs text-gray-600">
-                              as of{" "}
-                              {new Date(row.calculatedAt).toLocaleTimeString(
-                                [],
-                                {
-                                  hour: "numeric",
-                                  minute: "2-digit",
-                                },
-                              )}
+                        <TableCell>{row.quantity ?? "—"}</TableCell>
+
+                        <TableCell>
+                          {row.price != null ? `${row.price.toFixed(2)}` : "—"}
+                        </TableCell>
+
+                        <TableCell>
+                          {row.status === "unmatched" ? (
+                            <div className="text-red-900">
+                              <p>{row.matchError?.message}</p>
+
+                              {row.suggestions &&
+                                row.suggestions.length > 0 && (
+                                  <ul>
+                                    {row.suggestions.map((match) => (
+                                      <li key={match.product.sku}>
+                                        {match.product.name}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
                             </div>
+                          ) : typeof row.stock === "number" ? (
+                            <>
+                              {row.stock}
+
+                              {row.calculatedAt && (
+                                <div className="text-xs text-gray-600">
+                                  as of{" "}
+                                  {new Date(
+                                    row.calculatedAt,
+                                  ).toLocaleTimeString([], {
+                                    hour: "numeric",
+                                    minute: "2-digit",
+                                  })}
+                                </div>
+                              )}
+                            </>
+                          ) : row.stock === "hidden" ? (
+                            "—"
+                          ) : row.stock === "error" ? (
+                            <span className="text-red-900">
+                              {row.stockError
+                                ? buyerErrorMessage(row.stockError)
+                                : "Stock check failed."}
+                            </span>
+                          ) : (
+                            <span className="text-red-900">
+                              {buyerErrorMessage(row.stock)}
+                            </span>
                           )}
-                        </>
-                      ) : row.stock === "hidden" ? (
-                        "—"
-                      ) : row.stock === "error" ? (
-                        <span className="text-red-900">
-                          {row.stockError
-                            ? buyerErrorMessage(row.stockError)
-                            : "Stock check failed."
-                      }
-                        </span>
-                      ) : (
-                        <span className="text-red-900">
-                          {buyerErrorMessage(row.stock)}
-                        </span>
-                      )}
-                    </TableCell>
+                        </TableCell>
 
-                    {/* Lead Time Cell */}
-                    <TableCell>
-                      {" "}
-                      {row.leadTime != null
-                        ? `${row.leadTime} ${row.leadTime === 1 ? "day" : "days"}`
-                        : "—"}
-                    </TableCell>
+                        <TableCell>
+                          {row.leadTime != null
+                            ? `${row.leadTime} ${
+                                row.leadTime === 1 ? "day" : "days"
+                              }`
+                            : "—"}
+                        </TableCell>
 
-                    {/* Warehouse Cell */}
-                    <TableCell>
-                      {" "}
-                      {row.warehouse === "hidden"
-                        ? "Restricted"
-                        : (row.warehouse ?? "—")}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                        <TableCell>
+                          {row.warehouse === "hidden"
+                            ? "Restricted"
+                            : (row.warehouse ?? "—")}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </>
+            )}
           </>
         )}
       </div>
