@@ -7,8 +7,9 @@ import catalog from "@/data/catalog.json";
 import type { UserContext, ErrorType, Product } from "@/types";
 import { z } from "zod";
 import { addOrder, getOrderHistory } from "@/lib/erp/order";
+import { calculatePrice } from "@/lib/erp/accountRules";
 
-const nameBySku = new Map((catalog as Product[]).map((p) => [p.sku, p.name]));
+const productBySku = new Map((catalog as Product[]).map((p) => [p.sku, p]));
 
 export async function GET(request: Request) {
   const accountId = Number(
@@ -42,16 +43,30 @@ export async function GET(request: Request) {
   }
 
   const orders = await getOrderHistory(accountId);
+  // internal cost is admin-only, same rule as invoices (see visibleInvoice)
+  const showCost = account.role === "admin";
 
   const enriched = orders
     .map((o) => ({
       id: o.id,
       timestamp: o.timestamp,
-      items: o.items.map((it) => ({
-        sku: it.sku,
-        quantity: it.quantity,
-        productName: nameBySku.get(it.sku) ?? null,
-      })),
+      items: o.items.map((it) => {
+        const product = productBySku.get(it.sku);
+        return {
+          sku: it.sku,
+          quantity: it.quantity,
+          productName: product?.name ?? null,
+          // price is what this account pays; listPrice is before any
+          // contract discount, so the card can show the discount line.
+          price: product ? calculatePrice({ account, product }) : null,
+          listPrice: product?.basePrice ?? null,
+          internalCost: !product
+            ? null
+            : showCost
+              ? (product.internalCost ?? null)
+              : ("hidden" as const),
+        };
+      }),
     }))
     .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 

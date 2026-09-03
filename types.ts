@@ -45,6 +45,7 @@ export interface Product {
   sku: string;
   name: string;
   basePrice: number; // price before any account-based discount
+  internalCost?: number; // what it costs us; only admins are shown this
   leadTime: number; // days until this product ships
   warehouse: string; // which warehouse this product ships from
 }

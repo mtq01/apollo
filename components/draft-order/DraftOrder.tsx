@@ -169,7 +169,7 @@ export function DraftOrder() {
     <section className="mb-8 w-full max-w-4xl">
       <div className="mb-2 flex items-center justify-between">
         <h2 className="text-lg font-semibold">
-          Matching Products Found:
+          Your Cart: Continue adding or removing items
           {pricing && (
             <span className="ml-2 text-sm font-normal text-gray-500">
               pricing…
