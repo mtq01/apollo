@@ -40,7 +40,10 @@ export async function lookUpInvoice({
   const raw = await fs.readFile(filePath, "utf-8");
   const invoices: Invoice[] = JSON.parse(raw);
 
-  const invoice = invoices.find((invoice) => invoice.id === invoiceId);
+  const invoice = invoices.find(
+    (invoice) =>
+      invoice.id.toLowerCase().trim() === invoiceId.toLowerCase().trim(),
+  );
 
   if (!invoice) {
     return {
