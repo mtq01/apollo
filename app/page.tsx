@@ -299,7 +299,7 @@ export default function Reorder() {
           disabled={!text.trim() || isLoading}
           className="self-start font-bold rounded-lg bg-black px-4 py-2 text-apollo-light hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Lookup Products
+          Add Products
         </Button>
       </form>
 

@@ -1,11 +1,62 @@
-/* Places a new order. Takes the draft's {sku, quantity} lines, checks every
-   sku is real, and appends it to order-history.json via addOrder. */
+/* GET  lists an account's past orders, with product names filled in.
+   POST places a new order: takes the draft's {sku, quantity} lines, checks
+   every sku is real, and appends it to order-history.json via addOrder. */
 import { randomUUID } from "crypto";
 import accounts from "@/data/accounts.json";
 import catalog from "@/data/catalog.json";
 import type { UserContext, ErrorType, Product } from "@/types";
 import { z } from "zod";
-import { addOrder } from "@/lib/erp/order";
+import { addOrder, getOrderHistory } from "@/lib/erp/order";
+
+const nameBySku = new Map((catalog as Product[]).map((p) => [p.sku, p.name]));
+
+export async function GET(request: Request) {
+  const accountId = Number(
+    new URL(request.url).searchParams.get("accountId"),
+  );
+
+  if (!Number.isInteger(accountId) || accountId <= 0) {
+    return Response.json(
+      {
+        error: {
+          type: "invalid input",
+          message: "Please log in",
+        } satisfies ErrorType,
+      },
+      { status: 400 },
+    );
+  }
+
+  const account = (accounts as UserContext[]).find((a) => a.id === accountId);
+
+  if (!account) {
+    return Response.json(
+      {
+        error: {
+          type: "request failed",
+          message: "Cannot find account.",
+        } satisfies ErrorType,
+      },
+      { status: 400 },
+    );
+  }
+
+  const orders = await getOrderHistory(accountId);
+
+  const enriched = orders
+    .map((o) => ({
+      id: o.id,
+      timestamp: o.timestamp,
+      items: o.items.map((it) => ({
+        sku: it.sku,
+        quantity: it.quantity,
+        productName: nameBySku.get(it.sku) ?? null,
+      })),
+    }))
+    .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+
+  return Response.json({ orders: enriched });
+}
 
 const orderRequest = z.object({
   accountId: z
