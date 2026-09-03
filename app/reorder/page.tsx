@@ -24,6 +24,7 @@ import {
   TableRow,
   TableHead,
   TableCell,
+  TableFooter
 } from "@/components/ui/Table";
 import { AlertTriangleIcon } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -33,6 +34,15 @@ import {
 } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+// card import
+import { Badge } from "@/components/ui/badge";
+import {
+  Card,
+  CardAction,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 
 type QuoteRow = {
   // fields for a normal, successfully matched product
@@ -66,6 +76,14 @@ type InvoiceResults = {
 
 type Results = QuoteResults | InvoiceResults;
 
+// convert date/time to simple format
+function formatInvoiceDate(timestamp: string) {
+  const date = new Date(timestamp);
+  const dateStr = date.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  const timeStr = date.toLocaleTimeString("en-US", { hour: "numeric", minute: "numeric" });
+  return `${dateStr} at ${timeStr}`;
+}
+
 export default function Reorder() {
   // Create Loading State, Error State, Text State, and Results State
 
@@ -86,6 +104,25 @@ export default function Reorder() {
       : (results?.quotes.flatMap((row) => row.events ?? []) ?? []);
 
   const failedRows = quoteResults.filter((row) => row.stock === "error");
+
+  // invoice tax calculation
+    const subtotal =
+    results?.type === "invoice"
+      ? results.invoice.items.reduce(
+          (sum, item) => sum + item.price * item.quantity,
+          0
+        )
+      : 0;
+
+  const discountAmount =
+    results?.type === "invoice"
+      ? results.invoice.discount === "hidden"
+        ? 0
+        : results.invoice.discount
+      : 0;
+
+  const tax = (subtotal - discountAmount) * 0.07;
+  const total = subtotal - discountAmount + tax;
 
   // Function to get quote from the server
   const getQuote = async () => {
@@ -263,6 +300,71 @@ export default function Reorder() {
                     ))}
                   </TableBody>
                 </Table>
+
+
+
+
+            {/* Invoice Card ++++++++++++++++++++ */}
+            <Card className="relative mx-auto w-full max-w-sm">
+              <CardHeader>
+                <CardAction>
+                  <Badge variant="secondary">Paid</Badge>
+                </CardAction>
+                <CardTitle>Purchase Order: </CardTitle>
+                <CardDescription>{results.invoice.id}</CardDescription>
+              </CardHeader>
+
+              <Table>
+                <TableCaption>Your order from {formatInvoiceDate(results.invoice.timestamp)}</TableCaption>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-25">SKU</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Quantity</TableHead>
+                    <TableHead className="text-right">Price</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {results.invoice.items.map((item) => (
+                    <TableRow key={item.sku}>
+                      <TableCell className="font-medium">
+                        {item.sku}
+                      </TableCell>
+                      <TableCell>{item.productName}</TableCell>
+                      <TableCell className="text-center">{item.quantity}</TableCell>
+                      <TableCell className="text-right">{item.price}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+                <TableFooter>
+                  <TableRow>
+                    <TableCell colSpan={3}>Sub Total</TableCell>
+                    <TableCell className="text-right">${subtotal.toFixed(2)}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell colSpan={3}>Discount</TableCell>
+                    <TableCell className="text-right">{results.invoice.discount === "hidden"
+                      ? "Restricted"
+                      : `$${results.invoice.discount.toFixed(2)}`}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell colSpan={3}>Tax</TableCell>
+                    <TableCell className="text-right">${tax.toFixed(2)}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell colSpan={3}>Total</TableCell>
+                    <TableCell className="text-right">${total.toFixed(2)}</TableCell>
+                  </TableRow>
+                </TableFooter>
+              </Table>
+            </Card>
+
+
+
+
+
+
+                
 
                 <div className="mt-6 text-lg font-semibold">
                   Total: ${results.invoice.totalAmount.toFixed(2)}
