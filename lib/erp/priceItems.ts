@@ -95,10 +95,17 @@ export async function priceItems(
 
       // ...quote is the spread operator. It copies every key and value out of
       // quote into this new object, then name gets added alongside them.
+      // listPrice (pre-discount) and internalCost (admin-only, same rule as
+      // invoices) let the draft table show the discount and cost lines.
       quotes.push({
         ...quote,
         name: product.name,
         quantity: item.quantity,
+        listPrice: product.basePrice,
+        internalCost:
+          account.role === "admin"
+            ? (product.internalCost ?? null)
+            : ("hidden" as const),
       });
     } catch {
       // Only reached for a genuinely unexpected error, not a stock-check

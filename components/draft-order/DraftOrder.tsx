@@ -25,6 +25,8 @@ type PricedRow = {
   name: string;
   quantity: number | null;
   price?: number;
+  listPrice?: number;
+  internalCost?: number | "hidden" | null;
   stock?: number | "hidden" | "error" | ErrorType;
   stockError?: ErrorType;
   leadTime?: number;
@@ -32,6 +34,9 @@ type PricedRow = {
   calculatedAt?: string;
   events?: ActivityEvent[];
 };
+
+// same 7% the reorder page uses on invoices
+const TAX_RATE = 0.07;
 
 function formatCheckedAt(iso: string) {
   return new Date(iso).toLocaleTimeString([], {
@@ -142,9 +147,26 @@ export function DraftOrder() {
     setError(null);
   }
 
-  const subtotal = lines.reduce((sum, l) => {
-    const p = priced[l.sku]?.price;
-    return typeof p === "number" ? sum + p * l.quantity : sum;
+  // full breakdown over every draft line, mirroring the order cards
+  const subTotal = lines.reduce((sum, l) => {
+    const row = priced[l.sku];
+    const lp = row?.listPrice ?? row?.price;
+    return typeof lp === "number" ? sum + lp * l.quantity : sum;
+  }, 0);
+  const discount = lines.reduce((sum, l) => {
+    const row = priced[l.sku];
+    return typeof row?.listPrice === "number" && typeof row?.price === "number"
+      ? sum + (row.listPrice - row.price) * l.quantity
+      : sum;
+  }, 0);
+  const tax = (subTotal - discount) * TAX_RATE;
+  const total = subTotal - discount + tax;
+  const costHidden = lines.some(
+    (l) => priced[l.sku]?.internalCost === "hidden",
+  );
+  const internalCost = lines.reduce((sum, l) => {
+    const ic = priced[l.sku]?.internalCost;
+    return typeof ic === "number" ? sum + ic * l.quantity : sum;
   }, 0);
 
   if (lines.length === 0) {
@@ -281,8 +303,32 @@ export function DraftOrder() {
         </TableBody>
         <TableFooter>
           <TableRow>
-            <TableCell colSpan={6}>Subtotal</TableCell>
-            <TableCell className="text-right">${subtotal.toFixed(2)}</TableCell>
+            <TableCell colSpan={6}>Sub Total</TableCell>
+            <TableCell className="text-right">${subTotal.toFixed(2)}</TableCell>
+            <TableCell />
+          </TableRow>
+          <TableRow>
+            <TableCell colSpan={6}>Discount</TableCell>
+            <TableCell className="text-right">
+              {discount > 0 ? `-$${discount.toFixed(2)}` : "$0.00"}
+            </TableCell>
+            <TableCell />
+          </TableRow>
+          <TableRow>
+            <TableCell colSpan={6}>Tax</TableCell>
+            <TableCell className="text-right">${tax.toFixed(2)}</TableCell>
+            <TableCell />
+          </TableRow>
+          <TableRow>
+            <TableCell colSpan={6}>Total</TableCell>
+            <TableCell className="text-right">${total.toFixed(2)}</TableCell>
+            <TableCell />
+          </TableRow>
+          <TableRow>
+            <TableCell colSpan={6}>Internal Cost</TableCell>
+            <TableCell className="text-right">
+              {costHidden ? "Restricted" : `$${internalCost.toFixed(2)}`}
+            </TableCell>
             <TableCell />
           </TableRow>
         </TableFooter>
