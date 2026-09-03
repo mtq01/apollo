@@ -5,11 +5,13 @@
     "items": [
       {
         "sku": "PER-2284",
+        "productName": "Mechanical Keyboard",
         "quantity": 2,
         "price": 29.99
       },
       {
         "sku": "DSP-7742",
+        "productName": "27\" Monitor",
         "quantity": 1,
         "price": 249.99
       }
