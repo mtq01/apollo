@@ -1,37 +1,38 @@
 "use client";
 
+/* Shared state for the cart. It lives here, not inside DraftOrder, so the
+   paste box and the orders page can add to the same cart. DraftOrderProvider
+   fills in the real values. */
+
 import { createContext } from "react";
 
-// where a draft line came from, shown in the cart so the buyer can tell a
-// reordered item from one they typed or pasted.
+// Where a line came from. Drives the green tag in the cart.
 export type DraftLineSource =
   | "past-order"
   | "paste"
   | "manual-sku"
   | "suggestion";
 
-// one line in the buyer's working order. price is not stored here; it comes
-// from /api/quote/items whenever the cart is shown, so it is always current.
+// One line in the cart. No price here; it comes fresh from /api/quote/items every time the cart is shown.
 export type DraftLine = {
   sku: string;
   productName: string;
   quantity: number;
   source: DraftLineSource;
-  // the specific PO / order it came from (e.g. "inv-1001", "order-3"), shown
-  // as a tag under the sku. on a merge the first line's ref is kept.
+  // The PO or order it came from ("inv-1001", "order-3"), shown under the sku.
   sourceRef?: string;
 };
 
 type DraftOrderContextValue = {
   lines: DraftLine[];
-  // add lines to the draft. a sku already in the draft has its quantity summed
-  // rather than creating a second row.
+  // Add lines. A sku already in the cart gets its quantity added on instead of a second row.
   addLines: (lines: DraftLine[]) => void;
   setQuantity: (sku: string, quantity: number) => void;
   removeLine: (sku: string) => void;
   clear: () => void;
 };
 
+// Default value. The real one comes from DraftOrderProvider; these no-ops only run if a component reads the context with no provider above it.
 export const DraftOrderContext = createContext<DraftOrderContextValue>({
   lines: [],
   addLines: () => {},

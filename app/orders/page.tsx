@@ -1,5 +1,8 @@
 "use client";
 
+/* The Orders page. Lists past orders. Each is a card where the buyer ticks
+   lines, adjusts quantities, and adds them to the reorder-page cart. */
+
 import { useContext, useEffect, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -27,21 +30,24 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
+// One line of a past order, priced by GET /api/orders. productName and price
+// are null when the sku has left the catalog.
 type OrderItem = {
   sku: string;
   quantity: number;
   productName: string | null;
-  price: number | null;
-  listPrice: number | null;
-  internalCost: number | "hidden" | null;
+  price: number | null; // per unit, paid
+  listPrice: number | null; // per unit, before discount
+  internalCost: number | "hidden" | null; // per unit; "hidden" for non-admins
 };
 type PastOrder = { id: string; timestamp: string; items: OrderItem[] };
 
-// same 7% the reorder page uses on invoices
+// Same rate the reorder page uses on invoices.
 const TAX_RATE = 0.07;
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-US", {
+// A timestamp as a short date like "Sep 3, 2026".
+function formatDate(isoTimestamp: string) {
+  return new Date(isoTimestamp).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -52,28 +58,29 @@ export default function OrdersPage() {
   const { accountId } = useContext(AccountContext);
   const { addLines } = useContext(DraftOrderContext);
 
-  const [orders, setOrders] = useState<PastOrder[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [added, setAdded] = useState<string | null>(null);
+  const [orders, setOrders] = useState<PastOrder[] | null>(null); // null = loading
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [addedMessage, setAddedMessage] = useState<string | null>(null); // "Add selected" confirmation
 
+  // Load this account's orders. Re-runs when the account changes.
   useEffect(() => {
     if (!accountId) return;
     let cancelled = false;
 
     (async () => {
       try {
-        const r = await fetch(`/api/orders?accountId=${accountId}`);
-        const data = await r.json();
+        const response = await fetch(`/api/orders?accountId=${accountId}`);
+        const data = await response.json();
         if (cancelled) return;
         if (data?.error) {
-          setError(data.error.message ?? "Couldn't load your orders.");
+          setErrorMessage(data.error.message ?? "Couldn't load your orders.");
           setOrders([]);
         } else {
-          setError(null);
+          setErrorMessage(null);
           setOrders(data.orders ?? []);
         }
       } catch {
-        if (!cancelled) setError("Couldn't load your orders.");
+        if (!cancelled) setErrorMessage("Couldn't load your orders.");
       }
     })();
 
@@ -82,21 +89,23 @@ export default function OrdersPage() {
     };
   }, [accountId]);
 
+  // Add the ticked lines to the cart, tagged with the order, then confirm.
   function handleAdd(
     orderId: string,
-    picked: { sku: string; productName: string; quantity: number }[],
+    pickedItems: { sku: string; productName: string; quantity: number }[],
   ) {
-    if (picked.length === 0) return;
+    if (pickedItems.length === 0) return;
     addLines(
-      picked.map((p) => ({
-        ...p,
+      pickedItems.map((item) => ({
+        ...item,
         source: "past-order" as const,
         sourceRef: orderId,
       })),
     );
-    const msg = `Added ${picked.length} item${picked.length === 1 ? "" : "s"} from ${orderId}`;
-    toast.success(msg);
-    setAdded(`${msg}.`);
+    const itemCount = pickedItems.length;
+    const message = `Added ${itemCount} item${itemCount === 1 ? "" : "s"} from ${orderId}`;
+    toast.success(message);
+    setAddedMessage(`${message}.`);
   }
 
   return (
@@ -109,17 +118,17 @@ export default function OrdersPage() {
         <p className="text-sm text-gray-600">
           Select an account to see your past orders.
         </p>
-      ) : error ? (
-        <p className="text-sm text-red-700">{error}</p>
+      ) : errorMessage ? (
+        <p className="text-sm text-red-700">{errorMessage}</p>
       ) : orders === null ? (
         <p className="text-sm text-gray-600">Loading…</p>
       ) : orders.length === 0 ? (
         <p className="text-sm text-gray-600">No past orders yet.</p>
       ) : (
         <>
-          {added && (
+          {addedMessage && (
             <p className="mb-6 text-sm text-green-700">
-              {added}{" "}
+              {addedMessage}{" "}
               <Link href="/" className="underline hover:no-underline">
                 Go to Reorder
               </Link>
@@ -145,38 +154,53 @@ function OrderCard({
   order: PastOrder;
   onAdd: (
     orderId: string,
-    picked: { sku: string; productName: string; quantity: number }[],
+    pickedItems: { sku: string; productName: string; quantity: number }[],
   ) => void;
 }) {
+  // Ticked lines, keyed by sku. Lines with no catalog match start unticked.
   const [selected, setSelected] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(order.items.map((i) => [i.sku, Boolean(i.productName)])),
+    Object.fromEntries(
+      order.items.map((item) => [item.sku, Boolean(item.productName)]),
+    ),
   );
-  const [qty, setQty] = useState<Record<string, number>>(() =>
-    Object.fromEntries(order.items.map((i) => [i.sku, i.quantity])),
+  // Quantity per line, keyed by sku. Starts at the order's own quantity.
+  const [quantities, setQuantities] = useState<Record<string, number>>(() =>
+    Object.fromEntries(order.items.map((item) => [item.sku, item.quantity])),
   );
 
-  const chosen = order.items.filter((i) => selected[i.sku] && i.productName);
+  // Ticked lines that still exist in the catalog.
+  const chosenItems = order.items.filter(
+    (item) => selected[item.sku] && item.productName,
+  );
 
-  // totals over the ticked lines, so the card reflects what you're about to add
-  const subTotal = chosen.reduce(
-    (sum, i) => sum + (i.listPrice ?? i.price ?? 0) * (qty[i.sku] ?? 0),
+  // Totals over the ticked lines, so the card shows what you're about to add.
+  // subTotal: list price × qty
+  const subTotal = chosenItems.reduce(
+    (runningTotal, item) =>
+      runningTotal +
+      (item.listPrice ?? item.price ?? 0) * (quantities[item.sku] ?? 0),
     0,
   );
-  const discount = chosen.reduce(
-    (sum, i) =>
-      sum + ((i.listPrice ?? 0) - (i.price ?? 0)) * (qty[i.sku] ?? 0),
+  // discount: the saving (list price minus paid)
+  const discount = chosenItems.reduce(
+    (runningTotal, item) =>
+      runningTotal +
+      ((item.listPrice ?? 0) - (item.price ?? 0)) * (quantities[item.sku] ?? 0),
     0,
   );
+  // tax: TAX_RATE after discount. total: the three combined.
   const tax = (subTotal - discount) * TAX_RATE;
   const total = subTotal - discount + tax;
 
-  // internal cost is admin-only; the API sends "hidden" for everyone else
-  const costHidden = order.items.some((i) => i.internalCost === "hidden");
-  const internalCost = chosen.reduce(
-    (sum, i) =>
-      sum +
-      (typeof i.internalCost === "number" ? i.internalCost : 0) *
-        (qty[i.sku] ?? 0),
+  // internalCost: admin-only; the API sends "hidden" for everyone else.
+  const internalCostHidden = order.items.some(
+    (item) => item.internalCost === "hidden",
+  );
+  const internalCost = chosenItems.reduce(
+    (runningTotal, item) =>
+      runningTotal +
+      (typeof item.internalCost === "number" ? item.internalCost : 0) *
+        (quantities[item.sku] ?? 0),
     0,
   );
 
@@ -205,58 +229,69 @@ function OrderCard({
             <TableHead className="text-right">Line total</TableHead>
           </TableRow>
         </TableHeader>
+
         <TableBody>
-          {order.items.map((it) => {
-            const available = Boolean(it.productName);
+          {order.items.map((item) => {
+            // Only lines with a catalog match can be picked.
+            const available = Boolean(item.productName);
             const lineTotal =
-              it.price != null ? it.price * (qty[it.sku] ?? 0) : null;
+              item.price != null
+                ? item.price * (quantities[item.sku] ?? 0)
+                : null;
             return (
-              <TableRow key={it.sku}>
+              <TableRow key={item.sku}>
+                {/* Include this line */}
                 <TableCell>
                   <input
                     type="checkbox"
-                    checked={!!selected[it.sku]}
+                    checked={!!selected[item.sku]}
                     disabled={!available}
-                    onChange={(e) =>
-                      setSelected((s) => ({
-                        ...s,
-                        [it.sku]: e.target.checked,
+                    onChange={(event) =>
+                      setSelected((current) => ({
+                        ...current,
+                        [item.sku]: event.target.checked,
                       }))
                     }
                     className="size-4"
-                    aria-label={`Include ${it.productName ?? it.sku}`}
+                    aria-label={`Include ${item.productName ?? item.sku}`}
                   />
                 </TableCell>
-                <TableCell className="font-medium">{it.sku}</TableCell>
+
+                <TableCell className="font-medium">{item.sku}</TableCell>
+
                 <TableCell>
-                  {it.productName ?? (
+                  {item.productName ?? (
                     <span className="text-gray-500">
                       no longer in the catalog
                     </span>
                   )}
                 </TableCell>
+
+                {/* Editable qty, min 1 */}
                 <TableCell>
                   <Input
                     type="number"
                     min={1}
-                    value={qty[it.sku]}
+                    value={quantities[item.sku]}
                     disabled={!available}
-                    onChange={(e) =>
-                      setQty((q) => ({
-                        ...q,
-                        [it.sku]: Math.max(
+                    onChange={(event) =>
+                      setQuantities((current) => ({
+                        ...current,
+                        [item.sku]: Math.max(
                           1,
-                          Math.floor(Number(e.target.value) || 1),
+                          Math.floor(Number(event.target.value) || 1),
                         ),
                       }))
                     }
                     className="w-20"
-                    aria-label={`Quantity for ${it.productName ?? it.sku}`}
+                    aria-label={`Quantity for ${item.productName ?? item.sku}`}
                   />
                 </TableCell>
+
                 <TableCell className="text-right">
-                  {it.price != null ? `$${it.price.toFixed(2)}` : "—"}
+                  {item.price != null ? `$${item.price.toFixed(2)}` : "—"}
                 </TableCell>
+
                 <TableCell className="text-right">
                   {lineTotal != null ? `$${lineTotal.toFixed(2)}` : "—"}
                 </TableCell>
@@ -264,6 +299,8 @@ function OrderCard({
             );
           })}
         </TableBody>
+
+        {/* Totals (see the comments above the calculations) */}
         <TableFooter>
           <TableRow>
             <TableCell colSpan={5}>Sub Total</TableCell>
@@ -286,7 +323,9 @@ function OrderCard({
           <TableRow>
             <TableCell colSpan={5}>Internal Cost</TableCell>
             <TableCell className="text-right">
-              {costHidden ? "Restricted" : `$${internalCost.toFixed(2)}`}
+              {internalCostHidden
+                ? "Restricted"
+                : `$${internalCost.toFixed(2)}`}
             </TableCell>
           </TableRow>
         </TableFooter>
@@ -297,14 +336,14 @@ function OrderCard({
           onClick={() =>
             onAdd(
               order.id,
-              chosen.map((i) => ({
-                sku: i.sku,
-                productName: i.productName as string,
-                quantity: qty[i.sku],
+              chosenItems.map((item) => ({
+                sku: item.sku,
+                productName: item.productName as string,
+                quantity: quantities[item.sku],
               })),
             )
           }
-          disabled={chosen.length === 0}
+          disabled={chosenItems.length === 0}
           className="rounded-lg bg-black px-3 py-1.5 text-apollo-light hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
         >
           Add selected to your order

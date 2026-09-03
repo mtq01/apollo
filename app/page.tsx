@@ -1,4 +1,9 @@
-// reorder page
+/* The reorder page (the home route "/").
+
+  One text box. The buyer pastes SKUs, a product list, or a PO number. A plain
+  SKU list is priced straight from the catalog; anything with real words goes
+  through Claude. Whatever comes back is folded into the cart (DraftOrder).
+  Rows we can't add are listed at the bottom with "did you mean" suggestions. */
 "use client";
 
 import { useContext, useState } from "react";
@@ -8,20 +13,16 @@ import ErrorMessage from "@/components/ErrorMessage";
 import { buyerErrorMessage } from "@/lib/erp/errorMessages";
 import { ErrorType, ActivityEvent, ForcedFailure, Product } from "@/types";
 import { AccountContext } from "@/components/account/AccountContext";
-import {
-  DraftOrderContext,
-  type DraftLine,
-} from "@/components/draft-order/DraftOrderContext";
+import { DraftOrderContext, type DraftLine, } from "@/components/draft-order/DraftOrderContext";
 import { DraftOrder } from "@/components/draft-order/DraftOrder";
-import {
-  NativeSelect,
-  NativeSelectOption,
-} from "@/components/ui/native-select";
+import { NativeSelect, NativeSelectOption, } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 
+/* One row from either quote endpoint. Everything is optional because a row is
+   one of three things: a priced match, an ERP miss (an error, no price), or a
+   catalog miss (rawText plus "did you mean" suggestions). */
 type QuoteRow = {
-  // fields for a normal, successfully matched product
   name?: string;
   quantity: number | null;
   stock?: number | "hidden" | "error" | ErrorType;
@@ -33,70 +34,76 @@ type QuoteRow = {
   calculatedAt?: string;
   events?: ActivityEvent[];
 
-  // fields for a row where we couldnt find a matching product:
-  status?: "unmatched"; // set only when nothing matched, tells the page which version of the row to show
-  rawText?: string; // what the buyer actually typed, since we dont have a real product name
-  matchError?: ErrorType; // why it didnt match, plain english
-  suggestions?: { product: Product; score: number }[]; // cloe-guess products, so the buyer can pick one instead of a dead end
+  status?: "unmatched"; // set only on a catalog miss
+  rawText?: string; // the buyer's own words, since we have no product name
+  matchError?: ErrorType; // why it did not match, in plain English
+  suggestions?: { product: Product; score: number }[]; // close guesses to pick from
 };
 
-// a chunk that is just a product code, optionally with a quantity:
-// "PER-2284", "PER-2284 x2", "2 PER-2284". inv-/order-/po- are excluded so a
-// PO lookup still goes through Claude.
+/* Matches a chunk that is only a product code, with an optional quantity:
+   "PER-2284", "PER-2284 x2", "2 PER-2284". inv-, order-, and po- are excluded
+   so a PO lookup still goes through Claude. */
 const SKU_TOKEN =
   /^(?:(\d+)\s*[x×*]?\s+)?((?!inv-|order-|po-)[a-z]{2,4}-\d{3,6})(?:\s+[x×*]?\s*(\d+))?$/i;
 
-/* Returns a {sku, quantity} list when the whole text is nothing but product
-   codes, so we can skip Claude and hit /api/quote/items directly. Returns null
-   for anything with real words in it (that still needs parsing). */
+/* If the text is nothing but product codes, return them as a {sku, quantity}
+   list so we can skip Claude. Returns null the moment a chunk has real words. */
 function parseSkuList(
   text: string,
 ): { sku: string; quantity: number }[] | null {
   const chunks = text
     .split(/[\n,;]+/)
-    .map((c) => c.trim())
+    .map((chunk) => chunk.trim())
     .filter(Boolean);
   if (chunks.length === 0) return null;
 
   const items: { sku: string; quantity: number }[] = [];
   for (const chunk of chunks) {
-    const m = chunk.match(SKU_TOKEN);
-    if (!m) return null;
-    const qty = m[1] ? parseInt(m[1], 10) : m[3] ? parseInt(m[3], 10) : 1;
-    items.push({ sku: m[2].toUpperCase(), quantity: qty > 0 ? qty : 1 });
+    const match = chunk.match(SKU_TOKEN);
+    if (!match) return null;
+    // group 1 is a quantity before the code, group 3 is one after it
+    const quantity = match[1]
+      ? parseInt(match[1], 10)
+      : match[3]
+        ? parseInt(match[3], 10)
+        : 1;
+    items.push({
+      sku: match[2].toUpperCase(),
+      quantity: quantity > 0 ? quantity : 1,
+    });
   }
   return items;
 }
 
-export default function Reorder() {
-  // Create Loading State, Error State, Text State, and Results State
+// Turns a count into "1 item" or "3 items" for the toast message.
+function itemCountLabel(count: number) {
+  if (count === 1) return "1 item";
+  return `${count} items`;
+}
 
-  //get the accountId from the context
+export default function Reorder() {
   const { accountId } = useContext(AccountContext);
   const { addLines } = useContext(DraftOrderContext);
+
   const [isLoading, setLoading] = useState(false);
   const [error, setError] = useState<ErrorType | null>(null);
   const [text, setText] = useState("");
-  // rows we couldn't add straight to the draft (catalog miss or ERP miss)
+  // rows we could not add to the cart (a catalog miss or an ERP miss)
   const [unmatched, setUnmatched] = useState<QuoteRow[]>([]);
   const [forceFailure, setForceFailure] = useState<ForcedFailure | null>(null);
 
-  // Look up whatever was pasted and fold the result into the draft order.
+  // Look up whatever is in the text box and fold the result into the cart.
   const getQuote = async () => {
     if (!text.trim()) return;
     setLoading(true);
     setError(null);
 
     try {
-      // a plain SKU list skips Claude and goes straight to the catalog
+      // A plain SKU list skips Claude and hits the catalog directly.
       const skuItems = parseSkuList(text);
       const endpoint = skuItems ? "/api/quote/items" : "/api/quote";
       const body = skuItems
-        ? {
-            accountId,
-            items: skuItems,
-            forceFailure: forceFailure ?? undefined,
-          }
+        ? { accountId, items: skuItems, forceFailure: forceFailure ?? undefined }
         : { text, accountId, forceFailure: forceFailure ?? undefined };
 
       const response = await fetch(endpoint, {
@@ -104,7 +111,6 @@ export default function Reorder() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-
       const data = await response.json().catch(() => null);
 
       if (!response.ok) {
@@ -117,29 +123,29 @@ export default function Reorder() {
         return;
       }
 
-      // a PO / invoice lookup: drop its line items straight into the draft,
-      // same as reordering a past order. no card.
+      // A PO / invoice lookup: put its line items straight into the cart, just
+      // like reordering a past order. No card.
       if (data?.type === "invoice") {
-        const id: string = data.invoice?.id ?? "that PO";
-        const items = data.invoice?.items ?? [];
-        if (items.length > 0) {
+        const invoiceId: string = data.invoice?.id ?? "that PO";
+        const invoiceItems = data.invoice?.items ?? [];
+        if (invoiceItems.length > 0) {
           addLines(
-            items.map(
-              (it: {
+            invoiceItems.map(
+              (item: {
                 sku: string;
                 productName: string;
                 quantity: number;
               }): DraftLine => ({
-                sku: it.sku,
-                productName: it.productName,
-                quantity: it.quantity,
+                sku: item.sku,
+                productName: item.productName,
+                quantity: item.quantity,
                 source: "past-order",
-                sourceRef: id,
+                sourceRef: invoiceId,
               }),
             ),
           );
           toast.success(
-            `Added ${items.length} item${items.length === 1 ? "" : "s"} from ${id}`,
+            `Added ${itemCountLabel(invoiceItems.length)} from ${invoiceId}`,
           );
         }
         setUnmatched([]);
@@ -147,8 +153,8 @@ export default function Reorder() {
         return;
       }
 
-      // priced matches go into the draft; the rest are shown below so the
-      // buyer can pick a suggestion.
+      // A normal quote. Priced matches go into the cart; anything else is
+      // listed below so the buyer can pick a suggestion.
       const rows: QuoteRow[] = data?.quotes ?? [];
       const matched = rows.filter(
         (row) =>
@@ -184,34 +190,22 @@ export default function Reorder() {
       setLoading(false);
     }
   };
-  /* Say you type "SKU".
-    You press S:
-  
-    function runs, e.target.value is "S"
-    You press K:
 
-    function runs, e.target.value is "SK"
-    setText("SK")
-     You press U:
-
-     function runs, e.target.value is "SKU"
-    setText("SKU") */
-
-  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setText(e.target.value);
+  // Keep the text box value in state as the buyer types.
+  const handleChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setText(event.target.value);
   };
 
-  const handleSubmit = (e: React.SubmitEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const handleSubmit = (event: React.SubmitEvent<HTMLFormElement>) => {
+    event.preventDefault();
     getQuote();
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-
+  // Enter submits; Shift+Enter adds a newline.
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
       if (!text.trim() || isLoading) return;
-
       getQuote();
     }
   };
@@ -221,14 +215,12 @@ export default function Reorder() {
       <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black mb-8">
         Reorder
       </h1>
-      <form
-        onSubmit={handleSubmit}
-        className="flex flex-col gap-4 w-full mb-8 "
-      >
+
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4 w-full mb-8 ">
         <label>
           <span className="sr-only">
-            Paste a previous PO#, SKU numbers, or a list of products that you're
-            looking for.
+            Paste a previous PO number, SKU numbers, or a list of products you
+            are looking for.
           </span>
 
           <Textarea
@@ -249,17 +241,17 @@ export default function Reorder() {
         </Button>
       </form>
 
-      {/* Select Component - Force Failure Options */}
+      {/* Demo dropdown: force the next ERP call to time out or 404. */}
       <NativeSelect
         value={forceFailure ?? ""}
-        onChange={(e) =>
-          setForceFailure((e.target.value || null) as ForcedFailure | null)
+        onChange={(event) =>
+          setForceFailure((event.target.value || null) as ForcedFailure | null)
         }
       >
         <NativeSelectOption value="">Select Force Failure</NativeSelectOption>
-        <NativeSelectOption value="timeout">Force 'Timeout'</NativeSelectOption>
+        <NativeSelectOption value="timeout">{"Force 'Timeout'"}</NativeSelectOption>
         <NativeSelectOption value="not found">
-          Force 'Not Found'
+          {"Force 'Not Found'"}
         </NativeSelectOption>
       </NativeSelect>
 
@@ -268,21 +260,22 @@ export default function Reorder() {
       {isLoading && (
         <div className="flex w-full flex-col items-center gap-4 py-16">
           <Loader />
-
           <p className="text-lg">Getting quote...</p>
         </div>
       )}
 
       {error && <ErrorMessage error={error} />}
 
+      {/* Rows that could not go into the cart. Each shows why, plus any
+          "did you mean" products the buyer can add instead. */}
       {unmatched.length > 0 && (
         <div className="mb-8 w-full max-w-2xl">
           <h3 className="mb-2 text-sm font-medium text-gray-700">
             Couldn&apos;t add these
           </h3>
           <ul className="flex flex-col gap-3">
-            {unmatched.map((row, i) => (
-              <li key={i} className="rounded-lg border border-gray-200 p-3">
+            {unmatched.map((row, index) => (
+              <li key={index} className="rounded-lg border border-gray-200 p-3">
                 <p className="text-sm font-medium">
                   {row.rawText ?? row.name ?? "Unknown item"}
                 </p>
@@ -295,23 +288,27 @@ export default function Reorder() {
                 </p>
                 {row.suggestions && row.suggestions.length > 0 && (
                   <ul className="mt-2 flex flex-col gap-1">
-                    {row.suggestions.map((s) => (
-                      <li key={s.product.sku}>
+                    {row.suggestions.map((suggestion) => (
+                      <li key={suggestion.product.sku}>
                         <button
                           onClick={() => {
                             addLines([
                               {
-                                sku: s.product.sku,
-                                productName: s.product.name,
+                                sku: suggestion.product.sku,
+                                productName: suggestion.product.name,
                                 quantity: row.quantity ?? 1,
                                 source: "suggestion",
                               },
                             ]);
-                            setUnmatched((u) => u.filter((x) => x !== row));
+                            // this row is handled now, so drop it from the list
+                            setUnmatched((current) =>
+                              current.filter((other) => other !== row),
+                            );
                           }}
                           className="text-left text-sm underline hover:no-underline"
                         >
-                          Add {s.product.name} ({s.product.sku})
+                          Add {suggestion.product.name} ({suggestion.product.sku}
+                          )
                         </button>
                       </li>
                     ))}
@@ -322,7 +319,6 @@ export default function Reorder() {
           </ul>
         </div>
       )}
-
     </div>
   );
 }

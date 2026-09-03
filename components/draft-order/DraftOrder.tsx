@@ -1,5 +1,13 @@
 "use client";
 
+/* The "Your Cart" section on the reorder page.
+
+  The item list lives in DraftOrderContext, so the paste box and the orders
+  page can add to it. This component reads that list, re-prices it on the
+  server whenever it changes, shows the table with totals, and places the
+  order. Prices are never stored on a line, so the numbers always match the
+  current catalog and account. */
+
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
 
 import { AccountContext } from "@/components/account/AccountContext";
@@ -21,170 +29,226 @@ import {
 import { AlertTriangleIcon } from "lucide-react";
 import type { ActivityEvent, ErrorType, ForcedFailure } from "@/types";
 
-// one priced row back from /api/quote/items, keyed by sku for lookup
+/* A priced line from POST /api/quote/items, looked up by sku. Most fields are
+   optional because a line can fail to price and still come back. */
 type PricedRow = {
   sku?: string;
   name: string;
   quantity: number | null;
-  price?: number;
-  listPrice?: number;
-  internalCost?: number | "hidden" | null;
+  price?: number; // per unit, after discount
+  listPrice?: number; // per unit, before discount
+  internalCost?: number | "hidden" | null; // per unit; admins only
   stock?: number | "hidden" | "error" | ErrorType;
-  stockError?: ErrorType;
-  leadTime?: number;
+  stockError?: ErrorType; // set when the stock check failed
+  leadTime?: number; // days until it ships
   warehouse?: string | "hidden";
-  calculatedAt?: string;
-  events?: ActivityEvent[];
+  calculatedAt?: string; // when the server ran this quote
+  events?: ActivityEvent[]; // steps for the activity log
 };
 
-// same 7% the reorder page uses on invoices
+// Same rate the reorder page uses on invoices.
 const TAX_RATE = 0.07;
 
-function formatCheckedAt(iso: string) {
-  return new Date(iso).toLocaleTimeString([], {
+// Wait this long after the last change before re-pricing, so we don't fire a
+// request on every keystroke.
+const PRICE_REFRESH_DELAY_MS = 500;
+
+// A server timestamp as a short time like "2:45 PM".
+function formatStockCheckTime(isoTimestamp: string) {
+  return new Date(isoTimestamp).toLocaleTimeString([], {
     hour: "numeric",
     minute: "2-digit",
   });
 }
 
-const REPRICE_DELAY = 500;
-
 export function DraftOrder({
   forceFailure,
 }: {
+  // From the demo dropdown; makes the re-price fail on purpose.
   forceFailure?: ForcedFailure | null;
 }) {
+  // The active account. Prices depend on it; actions are blocked until one is picked.
   const { accountId } = useContext(AccountContext);
+
+  // The activity log sidebar. We push the server's steps into it on each re-price.
   const { setEvents } = useContext(ActivityContext);
+
+  // The shared cart: the items plus the ways to change them.
   const { lines, setQuantity, removeLine, clear } =
     useContext(DraftOrderContext);
 
-  const [priced, setPriced] = useState<Record<string, PricedRow>>({});
-  const [pricing, setPricing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [placing, setPlacing] = useState(false);
+  // Latest prices from the server, keyed by sku.
+  const [pricedBySku, setPricedBySku] = useState<Record<string, PricedRow>>({});
+
+  // True while a price request is running.
+  const [isPricing, setIsPricing] = useState(false);
+
+  // Shown when a request fails.
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // True while "Place order" is running.
+  const [isPlacingOrder, setIsPlacingOrder] = useState(false);
+
+  // The new order id after a successful "Place order"; shown as a confirmation.
   const [placedOrderId, setPlacedOrderId] = useState<string | null>(null);
-  const controller = useRef<AbortController | null>(null);
 
-  // re-price the whole draft against /api/quote/items so the total is always
-  // real, even after a quantity edit.
-  const reprice = useCallback(async () => {
-    controller.current?.abort();
+  // AbortController for the in-flight price request, so a stale response can't overwrite newer prices.
+  const priceRequestRef = useRef<AbortController | null>(null);
 
+  /* Re-price every line. In useCallback so the timer effect only restarts when
+     its inputs change. */
+  const refreshPrices = useCallback(async () => {
+    // Drop any earlier request so a slow one can't land after a newer one.
+    priceRequestRef.current?.abort();
+
+    // Nothing to price without an account or items.
     if (!accountId || lines.length === 0) {
-      setPriced({});
+      setPricedBySku({});
       setEvents([]);
-      setError(null);
+      setErrorMessage(null);
       return;
     }
 
-    const ac = new AbortController();
-    controller.current = ac;
-    setPricing(true);
-    setError(null);
+    // Start a request we can cancel later.
+    const abortController = new AbortController();
+    priceRequestRef.current = abortController;
+    setIsPricing(true);
+    setErrorMessage(null);
 
     try {
-      const res = await fetch("/api/quote/items", {
+      // Price every line. forceFailure is only set from the demo dropdown.
+      const response = await fetch("/api/quote/items", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           accountId,
-          items: lines.map((l) => ({ sku: l.sku, quantity: l.quantity })),
+          items: lines.map((line) => ({
+            sku: line.sku,
+            quantity: line.quantity,
+          })),
           forceFailure: forceFailure ?? undefined,
         }),
-        signal: ac.signal,
+        signal: abortController.signal,
       });
-      const data = await res.json();
+      const data = await response.json();
 
-      if (!res.ok) {
-        setError(data?.error?.message ?? "Couldn't price this order.");
+      if (!response.ok) {
+        setErrorMessage(data?.error?.message ?? "Couldn't price this order.");
         return;
       }
 
-      const bySku: Record<string, PricedRow> = {};
-      const events: ActivityEvent[] = [];
-      for (const row of (data.quotes ?? []) as PricedRow[]) {
-        if (row.sku) bySku[row.sku] = row;
-        if (row.events) events.push(...row.events);
+      // Index the priced rows by sku, and gather the activity events.
+      const nextPricedBySku: Record<string, PricedRow> = {};
+      const activityEvents: ActivityEvent[] = [];
+      for (const quoteRow of (data.quotes ?? []) as PricedRow[]) {
+        if (quoteRow.sku) nextPricedBySku[quoteRow.sku] = quoteRow;
+        if (quoteRow.events) activityEvents.push(...quoteRow.events);
       }
-      setPriced(bySku);
-      setEvents(events);
+      setPricedBySku(nextPricedBySku);
+      setEvents(activityEvents);
     } catch {
-      if (!ac.signal.aborted) setError("Couldn't reach the server.");
+      // Aborts land here too; only a real failure gets a message.
+      if (!abortController.signal.aborted) {
+        setErrorMessage("Couldn't reach the server.");
+      }
     } finally {
-      if (!ac.signal.aborted) setPricing(false);
+      if (!abortController.signal.aborted) setIsPricing(false);
     }
   }, [accountId, lines, forceFailure, setEvents]);
 
+  // Debounce: every change clears the old timer and starts a new one, so only a pause triggers the re-price.
   useEffect(() => {
-    const t = setTimeout(reprice, REPRICE_DELAY);
-    return () => clearTimeout(t);
-  }, [reprice]);
+    const timerId = setTimeout(refreshPrices, PRICE_REFRESH_DELAY_MS);
+    return () => clearTimeout(timerId);
+  }, [refreshPrices]);
 
+  // Place the order via POST /api/orders, then remember the id and empty the cart.
   async function placeOrder() {
     if (!accountId || lines.length === 0) return;
-    setPlacing(true);
-    setError(null);
+    setIsPlacingOrder(true);
+    setErrorMessage(null);
     try {
-      const res = await fetch("/api/orders", {
+      const response = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           accountId,
-          items: lines.map((l) => ({ sku: l.sku, quantity: l.quantity })),
+          items: lines.map((line) => ({
+            sku: line.sku,
+            quantity: line.quantity,
+          })),
         }),
       });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data?.error?.message ?? "Couldn't place the order.");
+      const data = await response.json();
+      if (!response.ok) {
+        setErrorMessage(data?.error?.message ?? "Couldn't place the order.");
         return;
       }
       setPlacedOrderId(data.order.id);
       clear();
     } catch {
-      setError("Couldn't reach the server.");
+      setErrorMessage("Couldn't reach the server.");
     } finally {
-      setPlacing(false);
+      setIsPlacingOrder(false);
     }
   }
 
+  // Empty the cart and clear any leftover messages.
   function clearDraft() {
     clear();
     setPlacedOrderId(null);
-    setError(null);
+    setErrorMessage(null);
   }
 
-  // full breakdown over every draft line, mirroring the order cards
-  const subTotal = lines.reduce((sum, l) => {
-    const row = priced[l.sku];
-    const lp = row?.listPrice ?? row?.price;
-    return typeof lp === "number" ? sum + lp * l.quantity : sum;
-  }, 0);
-  const discount = lines.reduce((sum, l) => {
-    const row = priced[l.sku];
-    return typeof row?.listPrice === "number" && typeof row?.price === "number"
-      ? sum + (row.listPrice - row.price) * l.quantity
-      : sum;
-  }, 0);
-  const tax = (subTotal - discount) * TAX_RATE;
-  const total = subTotal - discount + tax;
-  const costHidden = lines.some(
-    (l) => priced[l.sku]?.internalCost === "hidden",
-  );
-  const internalCost = lines.reduce((sum, l) => {
-    const ic = priced[l.sku]?.internalCost;
-    return typeof ic === "number" ? sum + ic * l.quantity : sum;
+  // Footer totals. Each one sums a value across every line.
+
+  // subTotal: list price × qty, before discount
+  const subTotal = lines.reduce((runningTotal, line) => {
+    const pricedRow = pricedBySku[line.sku];
+    const unitListPrice = pricedRow?.listPrice ?? pricedRow?.price;
+    return typeof unitListPrice === "number"
+      ? runningTotal + unitListPrice * line.quantity
+      : runningTotal;
   }, 0);
 
-  // lines whose ERP stock check failed (timeout, not found, ...)
-  const failedLines = lines.filter((l) => {
-    const row = priced[l.sku];
-    return row?.stock === "error" || row?.stockError != null;
+  // discount: what the account saves (list price minus paid price)
+  const discount = lines.reduce((runningTotal, line) => {
+    const pricedRow = pricedBySku[line.sku];
+    const listPrice = pricedRow?.listPrice;
+    const paidPrice = pricedRow?.price;
+    if (typeof listPrice === "number" && typeof paidPrice === "number") {
+      return runningTotal + (listPrice - paidPrice) * line.quantity;
+    }
+    return runningTotal;
+  }, 0);
+
+  // tax: TAX_RATE on the amount after discount
+  const tax = (subTotal - discount) * TAX_RATE;
+
+  // total: subtotal minus discount plus tax
+  const total = subTotal - discount + tax;
+
+  // internalCost: our cost × qty. "hidden" for non-admins, then we show "Restricted".
+  const internalCostIsHidden = lines.some(
+    (line) => pricedBySku[line.sku]?.internalCost === "hidden",
+  );
+  const internalCost = lines.reduce((runningTotal, line) => {
+    const costValue = pricedBySku[line.sku]?.internalCost;
+    return typeof costValue === "number"
+      ? runningTotal + costValue * line.quantity
+      : runningTotal;
+  }, 0);
+
+  // Lines whose stock check failed; the first one fills the red banner.
+  const failedLines = lines.filter((line) => {
+    const pricedRow = pricedBySku[line.sku];
+    return pricedRow?.stock === "error" || pricedRow?.stockError != null;
   });
   const firstFailedError = failedLines[0]
-    ? priced[failedLines[0].sku]?.stockError
+    ? pricedBySku[failedLines[0].sku]?.stockError
     : undefined;
 
+  // Empty cart: the "order placed" confirmation, or a hint.
   if (lines.length === 0) {
     return (
       <section className="mb-8 w-full max-w-4xl">
@@ -205,10 +269,11 @@ export function DraftOrder({
 
   return (
     <section className="mb-8 w-full max-w-4xl">
+      {/* Heading + Clear button */}
       <div className="mb-2 flex items-center justify-between">
         <h2 className="text-lg font-semibold">
           Your Cart: Continue adding or removing items
-          {pricing && (
+          {isPricing && (
             <span className="ml-2 text-sm font-normal text-gray-500">
               pricing…
             </span>
@@ -222,11 +287,9 @@ export function DraftOrder({
         </button>
       </div>
 
+      {/* Red banner if a stock check failed, otherwise the stale-data reminder. */}
       {failedLines.length > 0 ? (
-        <Alert
-          variant="destructive"
-          className="my-3 border-red-600 bg-red-50"
-        >
+        <Alert variant="destructive" className="my-3 border-red-600 bg-red-50">
           <AlertTriangleIcon />
           <AlertDescription>
             {failedLines[0].productName}:{" "}
@@ -259,13 +322,16 @@ export function DraftOrder({
             <TableHead />
           </TableRow>
         </TableHeader>
+
         <TableBody>
           {lines.map((line) => {
-            const row = priced[line.sku];
-            const unit = row?.price;
-            const stock = row?.stock;
+            // The priced row for this line, if any.
+            const pricedRow = pricedBySku[line.sku];
+            const unitPrice = pricedRow?.price;
+            const stockLevel = pricedRow?.stock;
             return (
               <TableRow key={line.sku}>
+                {/* Name, sku, and a green source tag for PO/order/suggestion. */}
                 <TableCell>
                   <div>{line.productName}</div>
                   <div className="font-mono text-xs text-gray-500">
@@ -281,62 +347,80 @@ export function DraftOrder({
                     </div>
                   ) : null}
                 </TableCell>
+
+                {/* Editable qty, min 1. */}
                 <TableCell>
                   <Input
                     type="number"
                     min={1}
                     value={line.quantity}
-                    onChange={(e) =>
-                      setQuantity(line.sku, Number(e.target.value) || 1)
+                    onChange={(event) =>
+                      setQuantity(line.sku, Number(event.target.value) || 1)
                     }
                     className="w-20"
                     aria-label={`Quantity for ${line.productName}`}
                   />
                 </TableCell>
+
+                {/* Price per unit. */}
                 <TableCell className="text-right">
-                  {typeof unit === "number" ? `$${unit.toFixed(2)}` : "—"}
+                  {typeof unitPrice === "number"
+                    ? `$${unitPrice.toFixed(2)}`
+                    : "—"}
                 </TableCell>
+
+                {/* Stock count + check time, or "—" if hidden, or an error. */}
                 <TableCell>
-                  {typeof stock === "number" ? (
+                  {typeof stockLevel === "number" ? (
                     <>
-                      {stock}
-                      {row?.calculatedAt && (
+                      {stockLevel}
+                      {pricedRow?.calculatedAt && (
                         <div className="text-xs text-gray-600">
-                          as of {formatCheckedAt(row.calculatedAt)}
+                          as of {formatStockCheckTime(pricedRow.calculatedAt)}
                         </div>
                       )}
                     </>
-                  ) : stock === "hidden" ? (
+                  ) : stockLevel === "hidden" ? (
                     "—"
-                  ) : stock === "error" ? (
+                  ) : stockLevel === "error" ? (
                     <span className="text-red-900">
-                      {row?.stockError
-                        ? buyerErrorMessage(row.stockError)
+                      {pricedRow?.stockError
+                        ? buyerErrorMessage(pricedRow.stockError)
                         : "Stock check failed."}
                     </span>
-                  ) : stock ? (
+                  ) : stockLevel ? (
                     <span className="text-red-900">
-                      {buyerErrorMessage(stock)}
+                      {buyerErrorMessage(stockLevel)}
                     </span>
                   ) : (
                     "—"
                   )}
                 </TableCell>
+
+                {/* Lead time in days. */}
                 <TableCell>
-                  {row?.leadTime != null
-                    ? `${row.leadTime} ${row.leadTime === 1 ? "day" : "days"}`
+                  {pricedRow?.leadTime != null
+                    ? `${pricedRow.leadTime} ${
+                        pricedRow.leadTime === 1 ? "day" : "days"
+                      }`
                     : "—"}
                 </TableCell>
+
+                {/* Warehouse, or "Restricted". */}
                 <TableCell>
-                  {row?.warehouse === "hidden"
+                  {pricedRow?.warehouse === "hidden"
                     ? "Restricted"
-                    : (row?.warehouse ?? "—")}
+                    : (pricedRow?.warehouse ?? "—")}
                 </TableCell>
+
+                {/* Price per unit × qty. */}
                 <TableCell className="text-right">
-                  {typeof unit === "number"
-                    ? `$${(unit * line.quantity).toFixed(2)}`
+                  {typeof unitPrice === "number"
+                    ? `$${(unitPrice * line.quantity).toFixed(2)}`
                     : "—"}
                 </TableCell>
+
+                {/* Remove line. */}
                 <TableCell>
                   <button
                     onClick={() => removeLine(line.sku)}
@@ -350,6 +434,8 @@ export function DraftOrder({
             );
           })}
         </TableBody>
+
+        {/* Totals (see the comments above the calculations). */}
         <TableFooter>
           <TableRow>
             <TableCell colSpan={6}>Sub Total</TableCell>
@@ -376,22 +462,27 @@ export function DraftOrder({
           <TableRow>
             <TableCell colSpan={6}>Internal Cost</TableCell>
             <TableCell className="text-right">
-              {costHidden ? "Restricted" : `$${internalCost.toFixed(2)}`}
+              {internalCostIsHidden
+                ? "Restricted"
+                : `$${internalCost.toFixed(2)}`}
             </TableCell>
             <TableCell />
           </TableRow>
         </TableFooter>
       </Table>
 
-      {error && <p className="mt-2 text-sm text-red-700">{error}</p>}
+      {errorMessage && (
+        <p className="mt-2 text-sm text-red-700">{errorMessage}</p>
+      )}
 
+      {/* Place order. Disabled while busy or with no account. */}
       <div className="mt-4">
         <Button
           onClick={placeOrder}
-          disabled={placing || pricing || !accountId}
+          disabled={isPlacingOrder || isPricing || !accountId}
           className="rounded-lg bg-black px-4 py-2 text-apollo-light hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {placing ? "Placing…" : "Place order"}
+          {isPlacingOrder ? "Placing…" : "Place order"}
         </Button>
       </div>
     </section>
