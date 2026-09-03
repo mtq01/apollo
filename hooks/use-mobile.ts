@@ -1,37 +1,40 @@
-import * as React from "react"
+import { useSyncExternalStore } from "react";
 
-const MOBILE_BREAKPOINT = 768
+// Screen widths where the layout changes.
+const MOBILE_BREAKPOINT = 768;
+const LARGE_BREAKPOINT = 1024;
 
+/* Build a subscribe function for one max-width media query. It runs the given
+   callback whenever the window crosses that width. */
+function subscribeToMaxWidth(maxWidth: number) {
+  return (onWidthChange: () => void) => {
+    const mediaQuery = window.matchMedia(`(max-width: ${maxWidth - 1}px)`);
+    mediaQuery.addEventListener("change", onWidthChange);
+    return () => mediaQuery.removeEventListener("change", onWidthChange);
+  };
+}
+
+const subscribeMobile = subscribeToMaxWidth(MOBILE_BREAKPOINT);
+const subscribeBelowLarge = subscribeToMaxWidth(LARGE_BREAKPOINT);
+
+/* True on phone-sized screens (below 768px). The sidebar uses this to switch
+   to a slide-out drawer. useSyncExternalStore returns false during server
+   render, then the real value once running in the browser. */
 export function useIsMobile() {
-  const [isMobile, setIsMobile] = React.useState<boolean | undefined>(undefined)
-
-  React.useEffect(() => {
-    const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`)
-    const onChange = () => {
-      setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
-    }
-    mql.addEventListener("change", onChange)
-    setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
-    return () => mql.removeEventListener("change", onChange)
-  }, [])
-
-  return !!isMobile
-}
-
-const LG_BREAKPOINT = 1024
-
-function subscribeBelowLg(callback: () => void) {
-  const mql = window.matchMedia(`(max-width: ${LG_BREAKPOINT - 1}px)`)
-  mql.addEventListener("change", callback)
-  return () => mql.removeEventListener("change", callback)
-}
-
-// the activity sidebar docks on lg+ and switches to a slide-in sheet below that,
-// so it needs its own breakpoint separate from useIsMobile.
-export function useIsBelowLg() {
-  return React.useSyncExternalStore(
-    subscribeBelowLg,
-    () => window.innerWidth < LG_BREAKPOINT,
+  return useSyncExternalStore(
+    subscribeMobile,
+    () => window.innerWidth < MOBILE_BREAKPOINT,
     () => false,
-  )
+  );
+}
+
+/* True below the large breakpoint (below 1024px). The activity sidebar docks
+   on large screens and turns into a slide-in sheet below that, so it needs
+   its own breakpoint apart from useIsMobile. */
+export function useIsBelowLg() {
+  return useSyncExternalStore(
+    subscribeBelowLarge,
+    () => window.innerWidth < LARGE_BREAKPOINT,
+    () => false,
+  );
 }

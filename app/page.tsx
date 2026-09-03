@@ -1,54 +1,31 @@
-// reorder page
+/* The reorder page (the home route "/").
+
+  One text box. The buyer pastes SKUs, a product list, or a PO number. A plain
+  SKU list is priced straight from the catalog; anything with real words goes
+  through Claude. Whatever comes back is folded into the cart (DraftOrder).
+  Rows we can't add are listed at the bottom with "did you mean" suggestions. */
 "use client";
 
-import { useContext, useEffect, useState } from "react";
+import { useContext, useState } from "react";
+import { toast } from "sonner";
 import Loader from "@/components/Loader";
-import EmptyState from "@/components/EmptyState";
 import ErrorMessage from "@/components/ErrorMessage";
-import {
-  ErrorType,
-  ActivityEvent,
-  ForcedFailure,
-  Product,
-  VisibleInvoice,
-} from "@/types";
-import { AccountContext } from "@/components/account/AccountContext";
-import { ActivityContext } from "@/components/activity-log/ActivityContext";
 import { buyerErrorMessage } from "@/lib/erp/errorMessages";
-// shad components
-import {
-  TableCaption,
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell,
-  TableFooter,
-} from "@/components/ui/table";
-import { AlertTriangleIcon } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import {
-  NativeSelect,
-  NativeSelectOption,
-} from "@/components/ui/native-select";
+import { ErrorType, ActivityEvent, ForcedFailure, Product } from "@/types";
+import { AccountContext } from "@/components/account/AccountContext";
+import { DraftOrderContext, type DraftLine, } from "@/components/draft-order/DraftOrderContext";
+import { DraftOrder } from "@/components/draft-order/DraftOrder";
+import { NativeSelect, NativeSelectOption, } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-// card import
-import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardAction,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 
+/* One row from either quote endpoint. Everything is optional because a row is
+   one of three things: a priced match, an ERP miss (an error, no price), or a
+   catalog miss (rawText plus "did you mean" suggestions). */
 type QuoteRow = {
-  // fields for a normal, successfully matched product
-  name: string;
+  name?: string;
   quantity: number | null;
-  stock: number | "hidden" | "error" | ErrorType;
+  stock?: number | "hidden" | "error" | ErrorType;
   stockError?: ErrorType;
   sku?: string;
   price?: number;
@@ -57,120 +34,154 @@ type QuoteRow = {
   calculatedAt?: string;
   events?: ActivityEvent[];
 
-  // fields for a row where we couldnt find a matching product:
-  status?: "unmatched"; // set only when nothing matched, tells the page which version of the row to show
-  rawText?: string; // what the buyer actually typed, since we dont have a real product name
-  matchError?: ErrorType; // why it didnt match, plain english
-  suggestions?: { product: Product; score: number }[]; // cloe-guess products, so the buyer can pick one instead of a dead end
+  status?: "unmatched"; // set only on a catalog miss
+  rawText?: string; // the buyer's own words, since we have no product name
+  matchError?: ErrorType; // why it did not match, in plain English
+  suggestions?: { product: Product; score: number }[]; // close guesses to pick from
 };
 
-type QuoteResults = {
-  type: "quotes";
-  quotes: QuoteRow[];
-};
+/* Matches a chunk that is only a product code, with an optional quantity:
+   "PER-2284", "PER-2284 x2", "2 PER-2284". inv-, order-, and po- are excluded
+   so a PO lookup still goes through Claude. */
+const SKU_TOKEN =
+  /^(?:(\d+)\s*[x×*]?\s+)?((?!inv-|order-|po-)[a-z]{2,4}-\d{3,6})(?:\s+[x×*]?\s*(\d+))?$/i;
 
-type InvoiceResults = {
-  type: "invoice";
-  invoice: VisibleInvoice;
-};
+/* If the text is nothing but product codes, return them as a {sku, quantity}
+   list so we can skip Claude. Returns null the moment a chunk has real words. */
+function parseSkuList(
+  text: string,
+): { sku: string; quantity: number }[] | null {
+  const chunks = text
+    .split(/[\n,;]+/)
+    .map((chunk) => chunk.trim())
+    .filter(Boolean);
+  if (chunks.length === 0) return null;
 
-type Results = QuoteResults | InvoiceResults;
+  const items: { sku: string; quantity: number }[] = [];
+  for (const chunk of chunks) {
+    const match = chunk.match(SKU_TOKEN);
+    if (!match) return null;
+    // group 1 is a quantity before the code, group 3 is one after it
+    const quantity = match[1]
+      ? parseInt(match[1], 10)
+      : match[3]
+        ? parseInt(match[3], 10)
+        : 1;
+    items.push({
+      sku: match[2].toUpperCase(),
+      quantity: quantity > 0 ? quantity : 1,
+    });
+  }
+  return items;
+}
 
-// convert date/time to simple format
-function formatInvoiceDate(timestamp: string) {
-  const date = new Date(timestamp);
-  const dateStr = date.toLocaleDateString("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-  const timeStr = date.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "numeric",
-  });
-  return `${dateStr} at ${timeStr}`;
+// Turns a count into "1 item" or "3 items" for the toast message.
+function itemCountLabel(count: number) {
+  if (count === 1) return "1 item";
+  return `${count} items`;
 }
 
 export default function Reorder() {
-  // Create Loading State, Error State, Text State, and Results State
-
-  //get the accountId from the context
   const { accountId } = useContext(AccountContext);
-  const { setEvents } = useContext(ActivityContext);
+  const { addLines } = useContext(DraftOrderContext);
+
   const [isLoading, setLoading] = useState(false);
   const [error, setError] = useState<ErrorType | null>(null);
   const [text, setText] = useState("");
-  const [results, setResults] = useState<Results | null>(null);
+  // rows we could not add to the cart (a catalog miss or an ERP miss)
+  const [unmatched, setUnmatched] = useState<QuoteRow[]>([]);
   const [forceFailure, setForceFailure] = useState<ForcedFailure | null>(null);
 
-  // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/flatMap
-  const quoteResults = results?.type === "quotes" ? results.quotes : [];
-
-  // push the activity events up to the shared context so the activity sidebar
-  // (rendered in the layout, not here) can display them.
-  useEffect(() => {
-    const events =
-      results?.type === "invoice"
-        ? results.invoice.events
-        : (results?.quotes.flatMap((row) => row.events ?? []) ?? []);
-    setEvents(events);
-  }, [results, setEvents]);
-
-  const failedRows = quoteResults.filter((row) => row.stock === "error");
-
-  // invoice tax calculation
-  const subtotal =
-    results?.type === "invoice"
-      ? results.invoice.items.reduce(
-          (sum, item) => sum + item.price * item.quantity,
-          0,
-        )
-      : 0;
-
-  const discountAmount =
-    results?.type === "invoice"
-      ? results.invoice.discount === "hidden"
-        ? 0
-        : results.invoice.discount
-      : 0;
-
-  const tax = (subtotal - discountAmount) * 0.07;
-  const total = subtotal - discountAmount + tax;
-
-  // Function to get quote from the server
+  // Look up whatever is in the text box and fold the result into the cart.
   const getQuote = async () => {
+    if (!text.trim()) return;
     setLoading(true);
     setError(null);
+
     try {
-      const response = await fetch("/api/quote", {
+      // A plain SKU list skips Claude and hits the catalog directly.
+      const skuItems = parseSkuList(text);
+      const endpoint = skuItems ? "/api/quote/items" : "/api/quote";
+      const body = skuItems
+        ? { accountId, items: skuItems, forceFailure: forceFailure ?? undefined }
+        : { text, accountId, forceFailure: forceFailure ?? undefined };
+
+      const response = await fetch(endpoint, {
         method: "POST",
-        body: JSON.stringify({
-          text,
-          accountId,
-          forceFailure: forceFailure ?? undefined,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
       });
+      const data = await response.json().catch(() => null);
 
       if (!response.ok) {
-        const fallback: ErrorType = {
-          type: "request failed",
-          message: "Couldn't get a quote. Please try again later.",
-        };
-
-        try {
-          const errData = await response.json();
-
-          setError(errData.error ? errData.error : fallback);
-        } catch {
-          setError(fallback);
-        }
-
+        setError(
+          data?.error ?? {
+            type: "request failed",
+            message: "Couldn't get a quote. Please try again later.",
+          },
+        );
         return;
       }
 
-      const data = await response.json();
-      setResults(data);
-    } catch (error) {
+      // A PO / invoice lookup: put its line items straight into the cart, just
+      // like reordering a past order. No card.
+      if (data?.type === "invoice") {
+        const invoiceId: string = data.invoice?.id ?? "that PO";
+        const invoiceItems = data.invoice?.items ?? [];
+        if (invoiceItems.length > 0) {
+          addLines(
+            invoiceItems.map(
+              (item: {
+                sku: string;
+                productName: string;
+                quantity: number;
+              }): DraftLine => ({
+                sku: item.sku,
+                productName: item.productName,
+                quantity: item.quantity,
+                source: "past-order",
+                sourceRef: invoiceId,
+              }),
+            ),
+          );
+          toast.success(
+            `Added ${itemCountLabel(invoiceItems.length)} from ${invoiceId}`,
+          );
+        }
+        setUnmatched([]);
+        setText("");
+        return;
+      }
+
+      // A normal quote. Priced matches go into the cart; anything else is
+      // listed below so the buyer can pick a suggestion.
+      const rows: QuoteRow[] = data?.quotes ?? [];
+      const matched = rows.filter(
+        (row) =>
+          row.status !== "unmatched" &&
+          row.sku &&
+          row.name &&
+          typeof row.price === "number",
+      );
+      const leftover = rows.filter((row) => !matched.includes(row));
+
+      if (matched.length > 0) {
+        const source: DraftLine["source"] = skuItems ? "manual-sku" : "paste";
+        addLines(
+          matched.map(
+            (row): DraftLine => ({
+              sku: row.sku as string,
+              productName: row.name as string,
+              quantity: row.quantity ?? 1,
+              source,
+            }),
+          ),
+        );
+      }
+
+      setUnmatched(leftover);
+      setText("");
+    } catch {
       setError({
         type: "request failed",
         message: "Couldn't reach the server. Check your connection.",
@@ -179,360 +190,135 @@ export default function Reorder() {
       setLoading(false);
     }
   };
-  /* Say you type "SKU".
-    You press S:
-  
-    function runs, e.target.value is "S"
-    You press K:
 
-    function runs, e.target.value is "SK"
-    setText("SK")
-     You press U:
-
-     function runs, e.target.value is "SKU"
-    setText("SKU") */
-
-  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setText(e.target.value);
+  // Keep the text box value in state as the buyer types.
+  const handleChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setText(event.target.value);
   };
 
-  const handleSubmit = (e: React.SubmitEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const handleSubmit = (event: React.SubmitEvent<HTMLFormElement>) => {
+    event.preventDefault();
     getQuote();
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-
+  // Enter submits; Shift+Enter adds a newline.
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
       if (!text.trim() || isLoading) return;
-
       getQuote();
     }
   };
 
   return (
     <div className="flex flex-col w-full min-w-0 items-start text-left px-16 py-16">
-        <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black mb-8">
-          Reorder
-        </h1>
-        <form
-          onSubmit={handleSubmit}
-          className="flex flex-col gap-4 w-full mb-8 "
-        >
-          <label>
-            <span className="sr-only">
-              Paste a previous PO#, SKU numbers, or a list of products that
-              you're looking for.
-            </span>
+      <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black mb-8">
+        Reorder
+      </h1>
 
-            <Textarea
-              placeholder="paste SKU's, an invoice or a list of products here"
-              className="border w-full border-gray-300 p-2 min-h-37.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-grey-500"
-              value={text}
-              onChange={handleChange}
-              onKeyDown={handleKeyDown}
-            />
-          </label>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4 w-full mb-8 ">
+        <label>
+          <span className="sr-only">
+            Paste a previous PO number, SKU numbers, or a list of products you
+            are looking for.
+          </span>
 
-          <Button
-            type="submit"
-            disabled={!text.trim() || isLoading}
-            className="self-start font-bold rounded-lg bg-black px-4 py-2 text-apollo-light hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Get Quote
-          </Button>
-        </form>
-
-        {/* Select Component - Force Failure Options */}
-        <NativeSelect
-          value={forceFailure ?? ""}
-          onChange={(e) =>
-            setForceFailure((e.target.value || null) as ForcedFailure | null)
-          }
-        >
-          <NativeSelectOption value="">Select Force Failure</NativeSelectOption>
-          <NativeSelectOption value="timeout">
-            Force 'Timeout'
-          </NativeSelectOption>
-          <NativeSelectOption value="not found">
-            Force 'Not Found'
-          </NativeSelectOption>
-        </NativeSelect>
-
-        {isLoading ? (
-          <div className="flex w-full flex-col items-center gap-4 py-16">
-            <Loader />
-
-            <p className="text-lg">Getting quote...</p>
-          </div>
-        ) : error ? (
-          <ErrorMessage error={error} />
-        ) : results === null ? (
-          <div className=" w-xl text-center mx-auto  py-16">
-            <EmptyState
-              title="Paste your order to get a quote"
-              message=" We'll work out what you meant and
-              show you prices, stock and delivery times."
-            />
-          </div>
-        ) : results.type === "quotes" && results.quotes.length === 0 ? (
-          <EmptyState
-            title="No matching products found."
-            message="Try a different search or check your input."
+          <Textarea
+            placeholder="paste SKU's, an invoice or a list of products here"
+            className="border w-full border-gray-300 p-2 min-h-37.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-grey-500"
+            value={text}
+            onChange={handleChange}
+            onKeyDown={handleKeyDown}
           />
-        ) : (
-          <>
-            {/* Alert Component */}
-            {results.type === "invoice" ? (
-              <div className="w-full">
-                <h2 className="text-2xl font-semibold mb-4">
-                  Invoice {results.invoice.id}
-                </h2>
+        </label>
 
-                <Table>
-                  <TableCaption>Invoice Details</TableCaption>
+        <Button
+          type="submit"
+          disabled={!text.trim() || isLoading}
+          className="self-start font-bold rounded-lg bg-black px-4 py-2 text-apollo-light hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Add Products
+        </Button>
+      </form>
 
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>SKU</TableHead>
-                      <TableHead>Quantity</TableHead>
-                      <TableHead>Price</TableHead>
-                    </TableRow>
-                  </TableHeader>
+      {/* Demo dropdown: force the next ERP call to time out or 404. */}
+      <NativeSelect
+        value={forceFailure ?? ""}
+        onChange={(event) =>
+          setForceFailure((event.target.value || null) as ForcedFailure | null)
+        }
+      >
+        <NativeSelectOption value="">Select Force Failure</NativeSelectOption>
+        <NativeSelectOption value="timeout">{"Force 'Timeout'"}</NativeSelectOption>
+        <NativeSelectOption value="not found">
+          {"Force 'Not Found'"}
+        </NativeSelectOption>
+      </NativeSelect>
 
-                  <TableBody>
-                    {results.invoice.items.map((item) => (
-                      <TableRow key={item.sku}>
-                        <TableCell className="font-medium">
-                          {item.sku}
-                        </TableCell>
+      <DraftOrder forceFailure={forceFailure} />
 
-                        <TableCell>{item.quantity}</TableCell>
+      {isLoading && (
+        <div className="flex w-full flex-col items-center gap-4 py-16">
+          <Loader />
+          <p className="text-lg">Getting quote...</p>
+        </div>
+      )}
 
-                        <TableCell>${item.price.toFixed(2)}</TableCell>
-                      </TableRow>
+      {error && <ErrorMessage error={error} />}
+
+      {/* Rows that could not go into the cart. Each shows why, plus any
+          "did you mean" products the buyer can add instead. */}
+      {unmatched.length > 0 && (
+        <div className="mb-8 w-full max-w-2xl">
+          <h3 className="mb-2 text-sm font-medium text-gray-700">
+            Couldn&apos;t add these
+          </h3>
+          <ul className="flex flex-col gap-3">
+            {unmatched.map((row, index) => (
+              <li key={index} className="rounded-lg border border-gray-200 p-3">
+                <p className="text-sm font-medium">
+                  {row.rawText ?? row.name ?? "Unknown item"}
+                </p>
+                <p className="text-sm text-gray-600">
+                  {row.matchError
+                    ? row.matchError.message
+                    : row.stockError
+                      ? buyerErrorMessage(row.stockError)
+                      : "No match in the catalog."}
+                </p>
+                {row.suggestions && row.suggestions.length > 0 && (
+                  <ul className="mt-2 flex flex-col gap-1">
+                    {row.suggestions.map((suggestion) => (
+                      <li key={suggestion.product.sku}>
+                        <button
+                          onClick={() => {
+                            addLines([
+                              {
+                                sku: suggestion.product.sku,
+                                productName: suggestion.product.name,
+                                quantity: row.quantity ?? 1,
+                                source: "suggestion",
+                              },
+                            ]);
+                            // this row is handled now, so drop it from the list
+                            setUnmatched((current) =>
+                              current.filter((other) => other !== row),
+                            );
+                          }}
+                          className="text-left text-sm underline hover:no-underline"
+                        >
+                          Add {suggestion.product.name} ({suggestion.product.sku}
+                          )
+                        </button>
+                      </li>
                     ))}
-                  </TableBody>
-                </Table>
-
-                {/* Invoice Card ++++++++++++++++++++ */}
-                <Card className="relative mx-auto w-full max-w-sm">
-                  <CardHeader>
-                    <CardAction>
-                      <Badge variant="secondary">Paid</Badge>
-                    </CardAction>
-                    <CardTitle>Purchase Order: </CardTitle>
-                    <CardDescription>{results.invoice.id}</CardDescription>
-                  </CardHeader>
-
-                  <Table>
-                    <TableCaption>
-                      Your order from{" "}
-                      {formatInvoiceDate(results.invoice.timestamp)}
-                    </TableCaption>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-25">SKU</TableHead>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Quantity</TableHead>
-                        <TableHead className="text-right">Price</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {results.invoice.items.map((item) => (
-                        <TableRow key={item.sku}>
-                          <TableCell className="font-medium">
-                            {item.sku}
-                          </TableCell>
-                          <TableCell>{item.productName}</TableCell>
-                          <TableCell className="text-center">
-                            {item.quantity}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {item.price}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                    <TableFooter>
-                      <TableRow>
-                        <TableCell colSpan={3}>Sub Total</TableCell>
-                        <TableCell className="text-right">
-                          ${subtotal.toFixed(2)}
-                        </TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell colSpan={3}>Discount</TableCell>
-                        <TableCell className="text-right">
-                          {results.invoice.discount === "hidden"
-                            ? "Restricted"
-                            : `$${results.invoice.discount.toFixed(2)}`}
-                        </TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell colSpan={3}>Tax</TableCell>
-                        <TableCell className="text-right">
-                          ${tax.toFixed(2)}
-                        </TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell colSpan={3}>Total</TableCell>
-                        <TableCell className="text-right">
-                          ${total.toFixed(2)}
-                        </TableCell>
-                      </TableRow>
-                    </TableFooter>
-                  </Table>
-                </Card>
-
-                <div className="mt-6 text-lg font-semibold">
-                  Total: ${results.invoice.totalAmount.toFixed(2)}
-                </div>
-
-                <div className="mt-4">
-                  <p>
-                    Discount:{" "}
-                    {results.invoice.discount === "hidden"
-                      ? "Restricted"
-                      : `$${results.invoice.discount.toFixed(2)}`}
-                  </p>
-
-                  <p>
-                    Internal Cost:{" "}
-                    {results.invoice.internalCost === "hidden"
-                      ? "Restricted"
-                      : `$${results.invoice.internalCost.toFixed(2)}`}
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <>
-                {/* Alert Component */}
-                {failedRows.length > 0 ? (
-                  <Alert
-                    variant="destructive"
-                    className="max-w my-3 border-red-600 bg-red-50"
-                  >
-                    <AlertTriangleIcon />
-                    <AlertDescription>
-                      {failedRows[0].name}:{" "}
-                      {failedRows[0].stockError
-                        ? buyerErrorMessage(failedRows[0].stockError)
-                        : "Something went wrong checking stock."}
-                      {failedRows.length > 1 &&
-                        ` (${failedRows.length} items affected)`}
-                    </AlertDescription>
-                  </Alert>
-                ) : (
-                  <Alert className="max-w bg-orange-200 text-black dark:border-amber-900 my-3 dark:bg-apollo-dark dark:text-apollo-light">
-                    <AlertTriangleIcon />
-                    <AlertDescription className="text-color-light">
-                      Stock data may be a few hours old, please confirm before
-                      ordering.
-                    </AlertDescription>
-                  </Alert>
+                  </ul>
                 )}
-
-                {/* Table Component */}
-                <Table>
-                  <TableCaption>Quote Results</TableCaption>
-
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>SKU</TableHead>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Qty</TableHead>
-                      <TableHead>Price</TableHead>
-                      <TableHead>Stock</TableHead>
-                      <TableHead>Lead Time</TableHead>
-                      <TableHead>Warehouse</TableHead>
-                    </TableRow>
-                  </TableHeader>
-
-                  <TableBody>
-                    {results.quotes.map((row, index) => (
-                      <TableRow key={index}>
-                        <TableCell className="font-medium">
-                          {row.sku ?? "—"}
-                        </TableCell>
-
-                        <TableCell>{row.name ?? row.rawText ?? "—"}</TableCell>
-
-                        <TableCell>{row.quantity ?? "—"}</TableCell>
-
-                        <TableCell>
-                          {row.price != null ? `${row.price.toFixed(2)}` : "—"}
-                        </TableCell>
-
-                        <TableCell>
-                          {row.status === "unmatched" ? (
-                            <div className="text-red-900">
-                              <p>{row.matchError?.message}</p>
-
-                              {row.suggestions &&
-                                row.suggestions.length > 0 && (
-                                  <ul>
-                                    {row.suggestions.map((match) => (
-                                      <li key={match.product.sku}>
-                                        {match.product.name}
-                                      </li>
-                                    ))}
-                                  </ul>
-                                )}
-                            </div>
-                          ) : typeof row.stock === "number" ? (
-                            <>
-                              {row.stock}
-
-                              {row.calculatedAt && (
-                                <div className="text-xs text-gray-600">
-                                  as of{" "}
-                                  {new Date(
-                                    row.calculatedAt,
-                                  ).toLocaleTimeString([], {
-                                    hour: "numeric",
-                                    minute: "2-digit",
-                                  })}
-                                </div>
-                              )}
-                            </>
-                          ) : row.stock === "hidden" ? (
-                            "—"
-                          ) : row.stock === "error" ? (
-                            <span className="text-red-900">
-                              {row.stockError
-                                ? buyerErrorMessage(row.stockError)
-                                : "Stock check failed."}
-                            </span>
-                          ) : (
-                            <span className="text-red-900">
-                              {buyerErrorMessage(row.stock)}
-                            </span>
-                          )}
-                        </TableCell>
-
-                        <TableCell>
-                          {row.leadTime != null
-                            ? `${row.leadTime} ${
-                                row.leadTime === 1 ? "day" : "days"
-                              }`
-                            : "—"}
-                        </TableCell>
-
-                        <TableCell>
-                          {row.warehouse === "hidden"
-                            ? "Restricted"
-                            : (row.warehouse ?? "—")}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </>
-            )}
-          </>
-        )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

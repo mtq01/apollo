@@ -3,6 +3,7 @@
     "sku": "PER-2284",
     "name": "Wireless Mouse",
     "basePrice": 29.99,
+    "internalCost": 17.99,
     "leadTime": 2,
     "warehouse": "Vancouver"
   },
@@ -10,6 +11,7 @@
     "sku": "PER-5017",
     "name": "Mechanical Keyboard",
     "basePrice": 89.99,
+    "internalCost": 53.99,
     "leadTime": 5,
     "warehouse": "Toronto"
   },
@@ -17,6 +19,7 @@
     "sku": "ACC-3391",
     "name": "USB-C Hub",
     "basePrice": 39.99,
+    "internalCost": 23.99,
     "leadTime": 3,
     "warehouse": "Calgary"
   },
@@ -24,6 +27,7 @@
     "sku": "DSP-7742",
     "name": "27\" Monitor",
     "basePrice": 249.99,
+    "internalCost": 149.99,
     "leadTime": 7,
     "warehouse": "Vancouver"
   },
@@ -31,6 +35,7 @@
     "sku": "ACC-1856",
     "name": "Laptop Stand",
     "basePrice": 49.99,
+    "internalCost": 29.99,
     "leadTime": 4,
     "warehouse": "Montreal"
   },
@@ -38,6 +43,7 @@
     "sku": "AUD-6203",
     "name": "Noise Cancelling Headphones",
     "basePrice": 179.99,
+    "internalCost": 107.99,
     "leadTime": 6,
     "warehouse": "Toronto"
   },
@@ -45,6 +51,7 @@
     "sku": "PER-4478",
     "name": "Webcam",
     "basePrice": 69.99,
+    "internalCost": 41.99,
     "leadTime": 2,
     "warehouse": "Calgary"
   },
@@ -52,6 +59,7 @@
     "sku": "STO-9915",
     "name": "Portable SSD",
     "basePrice": 119.99,
+    "internalCost": 71.99,
     "leadTime": 5,
     "warehouse": "Vancouver"
   }

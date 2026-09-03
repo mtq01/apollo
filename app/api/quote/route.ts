@@ -1,13 +1,9 @@
-/* quote route ping test :*/
 import accounts from "@/data/accounts.json";
-import { getQuoteForProduct } from "@/lib/erp/productQuote";
-import type { Product, UserContext, ErrorType, ForcedFailure } from "@/types";
-import { cacheTag } from "next/cache";
+import type { UserContext, ErrorType } from "@/types";
 import { parseOrder } from "@/lib/agent/parseOrder";
-import { lookupProduct } from "@/lib/erp/productLookup";
 import { lookUpInvoice } from "@/lib/erp/invoice";
 import { z } from "zod";
-import { suggestAlternatives } from "@/lib/agent/suggestAlternatives";
+import { priceItems } from "@/lib/erp/priceItems";
 
 // Creating a zod schema to validate the user input. we need to do this because
 // it is coming from an outside source and typescript cannot validate it at runtime
@@ -22,32 +18,6 @@ const userRequest = z.object({
   forceFailure: z.enum(["timeout", "not found"]).optional(),
   //These error messages are for us, the User will just receive a generic  "Please log in" message.
 });
-
-async function getCachedQuote(
-  account: UserContext,
-  product: Product,
-  forceFailure?: ForcedFailure,
-) {
-  /*
-[Caching]
-    - What it does: do the call once, save the answer, and have the saved results
-      back the saved if the same request comes in again.
-
-    - Why it's needed here: every Get Quote runs 8 ERP calls, ~2.5 seconds.
-      Press it again with nothing changed and it does all 8 again for the same
-      answer.
-
-    - What's actually slow: only the stock lookup. mockERP.ts deliberately waits
-      300-1500ms per call. Price is instant maths (basePrice x 0.9), and lead
-      time and warehouse are facts already sitting in catalog.json. So the
-      product is free; the quote costs a round trip.
-*/
-
-  "use cache";
-  cacheTag("stock");
-  // here it checks if the quote is stored in the chache, if it is, it returns the saved andswer, if not it runs like normal
-  return getQuoteForProduct({ account, product }, forceFailure);
-}
 
 //Will Need to send to post later down the line once the claude and finder logic is in place. for now, jsut grab the whole catalogue
 export async function POST(request: Request) {
@@ -149,72 +119,19 @@ export async function POST(request: Request) {
   });
 }
 
-  const quotes = [];
-  // Each time round, the loop body is a fresh scope, so `const product` isn't being reassigned.
-
-  for (const item of parsed.products) {
-    const product = lookupProduct({
+  const quotes = await priceItems(
+    account,
+    parsed.products.map((item) => ({
       sku: item.sku,
       productName: item.productGuess.name,
-    });
-    /* continue, to skip the rest of this loop body and start the next item.
-     Not break (which exits the loop entirely), not return
-    */
-    if (!product) {
-      // no exact match in the catalog. get 2-3 close-guess suggestions and a plain-English message instead of just saying "not found."
-      const { suggestions, matchError } = suggestAlternatives(
-        item.productGuess.name ?? item.rawText,
-      );
+      quantity: item.quantity,
+      rawText: item.rawText,
+    })),
+    forceFailure,
+  );
 
-      quotes.push({
-        status: "unmatched", // no product found, different shape than a normal quote row
-        rawText: item.rawText, // what the buyer actually types, since we dont have a real product name
-        matchError, // the "did you mean X?" message from suggestAlternatives
-        suggestions, // the actual close-guess products, so the UI can show them as options
-        quantity: item.quantity,
-      });
-      continue;
-    }
-    try {
-      // getQuoteForProduct no longer throws on a failed stock check, it always
-      // returns normally and reports the failure via `stockError` on the result
-      // instead (see DECISIONS.md, Aug 18). So the quote already carries
-      // whatever succeeded (price, warehouse, etc.) plus the error for what didn't.
-      const quote = await getCachedQuote(account, product, forceFailure);
-      // ...quote is the spread operator. It copies every key and value out of quote
-      // into this new object, then name gets added alongside them.
-      // Note: this builds a NEW object, quote itself is untouched.
-      if (quote.stockError?.type === "not found") {
-        quotes.push({
-          name: item.rawText,
-          quantity: item.quantity,
-          stock: quote.stock,
-          stockError: quote.stockError,
-          events: quote.events,
-        });
-        continue;
-      }
-
-      quotes.push({
-        ...quote,
-        name: product.name,
-        quantity: item.quantity,
-      });
-    } catch {
-      // Only reached for a genuinely unexpected error, not a stock-check
-      // failure, that's already handled above via `quote.stockError`.
-      quotes.push({
-        name: item.rawText,
-        quantity: item.quantity,
-        stock: {
-          type: "request failed",
-          message: "Something went wrong pricing this item.",
-        } satisfies ErrorType,
-      });
-    }
-  }
-return Response.json({
-  type: "quotes",
-  quotes,
-});
+  return Response.json({
+    type: "quotes",
+    quotes,
+  });
 }

@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/sidebar"
 import {
   ShoppingCartIcon,
+  PackageIcon,
   FlaskConicalIcon,
   CommandIcon,
 } from "lucide-react"
@@ -26,6 +27,11 @@ const data = {
       title: "Reorder",
       url: "/",
       icon: <ShoppingCartIcon />,
+    },
+    {
+      title: "Orders",
+      url: "/orders",
+      icon: <PackageIcon />,
     },
     {
       title: "Claude Test",
