@@ -3,7 +3,6 @@
 
 import { useContext, useEffect, useState } from "react";
 import Loader from "@/components/Loader";
-import EmptyState from "@/components/EmptyState";
 import ErrorMessage from "@/components/ErrorMessage";
 import {
   ErrorType,
@@ -14,7 +13,11 @@ import {
 } from "@/types";
 import { AccountContext } from "@/components/account/AccountContext";
 import { ActivityContext } from "@/components/activity-log/ActivityContext";
-import { buyerErrorMessage } from "@/lib/erp/errorMessages";
+import {
+  DraftOrderContext,
+  type DraftLine,
+} from "@/components/draft-order/DraftOrderContext";
+import { DraftOrder } from "@/components/draft-order/DraftOrder";
 // shad components
 import {
   TableCaption,
@@ -26,8 +29,6 @@ import {
   TableCell,
   TableFooter,
 } from "@/components/ui/table";
-import { AlertTriangleIcon } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   NativeSelect,
   NativeSelectOption,
@@ -46,9 +47,9 @@ import {
 
 type QuoteRow = {
   // fields for a normal, successfully matched product
-  name: string;
+  name?: string;
   quantity: number | null;
-  stock: number | "hidden" | "error" | ErrorType;
+  stock?: number | "hidden" | "error" | ErrorType;
   stockError?: ErrorType;
   sku?: string;
   price?: number;
@@ -76,6 +77,34 @@ type InvoiceResults = {
 
 type Results = QuoteResults | InvoiceResults;
 
+// a chunk that is just a product code, optionally with a quantity:
+// "PER-2284", "PER-2284 x2", "2 PER-2284". inv-/order-/po- are excluded so a
+// PO lookup still goes through Claude.
+const SKU_TOKEN =
+  /^(?:(\d+)\s*[x×*]?\s+)?((?!inv-|order-|po-)[a-z]{2,4}-\d{3,6})(?:\s+[x×*]?\s*(\d+))?$/i;
+
+/* Returns a {sku, quantity} list when the whole text is nothing but product
+   codes, so we can skip Claude and hit /api/quote/items directly. Returns null
+   for anything with real words in it (that still needs parsing). */
+function parseSkuList(
+  text: string,
+): { sku: string; quantity: number }[] | null {
+  const chunks = text
+    .split(/[\n,;]+/)
+    .map((c) => c.trim())
+    .filter(Boolean);
+  if (chunks.length === 0) return null;
+
+  const items: { sku: string; quantity: number }[] = [];
+  for (const chunk of chunks) {
+    const m = chunk.match(SKU_TOKEN);
+    if (!m) return null;
+    const qty = m[1] ? parseInt(m[1], 10) : m[3] ? parseInt(m[3], 10) : 1;
+    items.push({ sku: m[2].toUpperCase(), quantity: qty > 0 ? qty : 1 });
+  }
+  return items;
+}
+
 // convert date/time to simple format
 function formatInvoiceDate(timestamp: string) {
   const date = new Date(timestamp);
@@ -97,26 +126,19 @@ export default function Reorder() {
   //get the accountId from the context
   const { accountId } = useContext(AccountContext);
   const { setEvents } = useContext(ActivityContext);
+  const { addLines } = useContext(DraftOrderContext);
   const [isLoading, setLoading] = useState(false);
   const [error, setError] = useState<ErrorType | null>(null);
   const [text, setText] = useState("");
   const [results, setResults] = useState<Results | null>(null);
+  // rows we couldn't add straight to the draft (catalog miss or ERP miss)
+  const [unmatched, setUnmatched] = useState<QuoteRow[]>([]);
   const [forceFailure, setForceFailure] = useState<ForcedFailure | null>(null);
 
-  // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/flatMap
-  const quoteResults = results?.type === "quotes" ? results.quotes : [];
-
-  // push the activity events up to the shared context so the activity sidebar
-  // (rendered in the layout, not here) can display them.
+  // an invoice lookup shows its own activity; the draft handles its own.
   useEffect(() => {
-    const events =
-      results?.type === "invoice"
-        ? results.invoice.events
-        : (results?.quotes.flatMap((row) => row.events ?? []) ?? []);
-    setEvents(events);
+    if (results?.type === "invoice") setEvents(results.invoice.events);
   }, [results, setEvents]);
-
-  const failedRows = quoteResults.filter((row) => row.stock === "error");
 
   // invoice tax calculation
   const subtotal =
@@ -137,40 +159,77 @@ export default function Reorder() {
   const tax = (subtotal - discountAmount) * 0.07;
   const total = subtotal - discountAmount + tax;
 
-  // Function to get quote from the server
+  // Look up whatever was pasted and fold the result into the draft order.
   const getQuote = async () => {
+    if (!text.trim()) return;
     setLoading(true);
     setError(null);
+
     try {
-      const response = await fetch("/api/quote", {
+      // a plain SKU list skips Claude and goes straight to the catalog
+      const skuItems = parseSkuList(text);
+      const endpoint = skuItems ? "/api/quote/items" : "/api/quote";
+      const body = skuItems
+        ? {
+            accountId,
+            items: skuItems,
+            forceFailure: forceFailure ?? undefined,
+          }
+        : { text, accountId, forceFailure: forceFailure ?? undefined };
+
+      const response = await fetch(endpoint, {
         method: "POST",
-        body: JSON.stringify({
-          text,
-          accountId,
-          forceFailure: forceFailure ?? undefined,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
       });
 
+      const data = await response.json().catch(() => null);
+
       if (!response.ok) {
-        const fallback: ErrorType = {
-          type: "request failed",
-          message: "Couldn't get a quote. Please try again later.",
-        };
-
-        try {
-          const errData = await response.json();
-
-          setError(errData.error ? errData.error : fallback);
-        } catch {
-          setError(fallback);
-        }
-
+        setError(
+          data?.error ?? {
+            type: "request failed",
+            message: "Couldn't get a quote. Please try again later.",
+          },
+        );
         return;
       }
 
-      const data = await response.json();
-      setResults(data);
-    } catch (error) {
+      if (data?.type === "invoice") {
+        setResults(data);
+        return;
+      }
+
+      // priced matches go into the draft; the rest are shown below so the
+      // buyer can pick a suggestion.
+      const rows: QuoteRow[] = data?.quotes ?? [];
+      const matched = rows.filter(
+        (row) =>
+          row.status !== "unmatched" &&
+          row.sku &&
+          row.name &&
+          typeof row.price === "number",
+      );
+      const leftover = rows.filter((row) => !matched.includes(row));
+
+      if (matched.length > 0) {
+        const source: DraftLine["source"] = skuItems ? "manual-sku" : "paste";
+        addLines(
+          matched.map(
+            (row): DraftLine => ({
+              sku: row.sku as string,
+              productName: row.name as string,
+              quantity: row.quantity ?? 1,
+              source,
+            }),
+          ),
+        );
+      }
+
+      setUnmatched(leftover);
+      setResults(null);
+      setText("");
+    } catch {
       setError({
         type: "request failed",
         message: "Couldn't reach the server. Check your connection.",
@@ -213,326 +272,185 @@ export default function Reorder() {
 
   return (
     <div className="flex flex-col w-full min-w-0 items-start text-left px-16 py-16">
-        <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black mb-8">
-          Reorder
-        </h1>
-        <form
-          onSubmit={handleSubmit}
-          className="flex flex-col gap-4 w-full mb-8 "
-        >
-          <label>
-            <span className="sr-only">
-              Paste a previous PO#, SKU numbers, or a list of products that
-              you're looking for.
-            </span>
+      <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black mb-8">
+        Reorder
+      </h1>
+      <form
+        onSubmit={handleSubmit}
+        className="flex flex-col gap-4 w-full mb-8 "
+      >
+        <label>
+          <span className="sr-only">
+            Paste a previous PO#, SKU numbers, or a list of products that you're
+            looking for.
+          </span>
 
-            <Textarea
-              placeholder="paste SKU's, an invoice or a list of products here"
-              className="border w-full border-gray-300 p-2 min-h-37.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-grey-500"
-              value={text}
-              onChange={handleChange}
-              onKeyDown={handleKeyDown}
-            />
-          </label>
-
-          <Button
-            type="submit"
-            disabled={!text.trim() || isLoading}
-            className="self-start font-bold rounded-lg bg-black px-4 py-2 text-apollo-light hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Get Quote
-          </Button>
-        </form>
-
-        {/* Select Component - Force Failure Options */}
-        <NativeSelect
-          value={forceFailure ?? ""}
-          onChange={(e) =>
-            setForceFailure((e.target.value || null) as ForcedFailure | null)
-          }
-        >
-          <NativeSelectOption value="">Select Force Failure</NativeSelectOption>
-          <NativeSelectOption value="timeout">
-            Force 'Timeout'
-          </NativeSelectOption>
-          <NativeSelectOption value="not found">
-            Force 'Not Found'
-          </NativeSelectOption>
-        </NativeSelect>
-
-        {isLoading ? (
-          <div className="flex w-full flex-col items-center gap-4 py-16">
-            <Loader />
-
-            <p className="text-lg">Getting quote...</p>
-          </div>
-        ) : error ? (
-          <ErrorMessage error={error} />
-        ) : results === null ? (
-          <div className=" w-xl text-center mx-auto  py-16">
-            <EmptyState
-              title="Paste your order to get a quote"
-              message=" We'll work out what you meant and
-              show you prices, stock and delivery times."
-            />
-          </div>
-        ) : results.type === "quotes" && results.quotes.length === 0 ? (
-          <EmptyState
-            title="No matching products found."
-            message="Try a different search or check your input."
+          <Textarea
+            placeholder="paste SKU's, an invoice or a list of products here"
+            className="border w-full border-gray-300 p-2 min-h-37.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-grey-500"
+            value={text}
+            onChange={handleChange}
+            onKeyDown={handleKeyDown}
           />
-        ) : (
-          <>
-            {/* Alert Component */}
-            {results.type === "invoice" ? (
-              <div className="w-full">
-                <h2 className="text-2xl font-semibold mb-4">
-                  Invoice {results.invoice.id}
-                </h2>
+        </label>
 
-                <Table>
-                  <TableCaption>Invoice Details</TableCaption>
+        <Button
+          type="submit"
+          disabled={!text.trim() || isLoading}
+          className="self-start font-bold rounded-lg bg-black px-4 py-2 text-apollo-light hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Lookup Products
+        </Button>
+      </form>
 
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>SKU</TableHead>
-                      <TableHead>Quantity</TableHead>
-                      <TableHead>Price</TableHead>
-                    </TableRow>
-                  </TableHeader>
+      {/* Select Component - Force Failure Options */}
+      <NativeSelect
+        value={forceFailure ?? ""}
+        onChange={(e) =>
+          setForceFailure((e.target.value || null) as ForcedFailure | null)
+        }
+      >
+        <NativeSelectOption value="">Select Force Failure</NativeSelectOption>
+        <NativeSelectOption value="timeout">Force 'Timeout'</NativeSelectOption>
+        <NativeSelectOption value="not found">
+          Force 'Not Found'
+        </NativeSelectOption>
+      </NativeSelect>
 
-                  <TableBody>
-                    {results.invoice.items.map((item) => (
-                      <TableRow key={item.sku}>
-                        <TableCell className="font-medium">
-                          {item.sku}
-                        </TableCell>
+      <DraftOrder />
 
-                        <TableCell>{item.quantity}</TableCell>
+      {isLoading && (
+        <div className="flex w-full flex-col items-center gap-4 py-16">
+          <Loader />
 
-                        <TableCell>${item.price.toFixed(2)}</TableCell>
-                      </TableRow>
+          <p className="text-lg">Getting quote...</p>
+        </div>
+      )}
+
+      {error && <ErrorMessage error={error} />}
+
+      {unmatched.length > 0 && (
+        <div className="mb-8 w-full max-w-2xl">
+          <h3 className="mb-2 text-sm font-medium text-gray-700">
+            Couldn&apos;t add these
+          </h3>
+          <ul className="flex flex-col gap-3">
+            {unmatched.map((row, i) => (
+              <li key={i} className="rounded-lg border border-gray-200 p-3">
+                <p className="text-sm font-medium">
+                  {row.rawText ?? row.name ?? "Unknown item"}
+                </p>
+                <p className="text-sm text-gray-600">
+                  {row.matchError?.message ??
+                    row.stockError?.message ??
+                    "No match in the catalog."}
+                </p>
+                {row.suggestions && row.suggestions.length > 0 && (
+                  <ul className="mt-2 flex flex-col gap-1">
+                    {row.suggestions.map((s) => (
+                      <li key={s.product.sku}>
+                        <button
+                          onClick={() => {
+                            addLines([
+                              {
+                                sku: s.product.sku,
+                                productName: s.product.name,
+                                quantity: row.quantity ?? 1,
+                                source: "suggestion",
+                              },
+                            ]);
+                            setUnmatched((u) => u.filter((x) => x !== row));
+                          }}
+                          className="text-left text-sm underline hover:no-underline"
+                        >
+                          Add {s.product.name} ({s.product.sku})
+                        </button>
+                      </li>
                     ))}
-                  </TableBody>
-                </Table>
+                  </ul>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
-                {/* Invoice Card ++++++++++++++++++++ */}
-                <Card className="relative mx-auto w-full max-w-sm">
-                  <CardHeader>
-                    <CardAction>
-                      <Badge variant="secondary">Paid</Badge>
-                    </CardAction>
-                    <CardTitle>Purchase Order: </CardTitle>
-                    <CardDescription>{results.invoice.id}</CardDescription>
-                  </CardHeader>
+      {results?.type === "invoice" && (
+        <div className="w-full">
+          {/* Invoice Card ++++++++++++++++++++ */}
+          <Card className="relative mx-auto w-full max-w-sm">
+            <CardHeader>
+              <CardAction>
+                <Badge variant="secondary">Paid</Badge>
+              </CardAction>
+              <CardTitle>Purchase Order: {results.invoice.id}</CardTitle>
+              <CardDescription> Submitted: {formatInvoiceDate(results.invoice.timestamp)}</CardDescription>
+            </CardHeader>
 
-                  <Table>
-                    <TableCaption>
-                      Your order from{" "}
-                      {formatInvoiceDate(results.invoice.timestamp)}
-                    </TableCaption>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-25">SKU</TableHead>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Quantity</TableHead>
-                        <TableHead className="text-right">Price</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {results.invoice.items.map((item) => (
-                        <TableRow key={item.sku}>
-                          <TableCell className="font-medium">
-                            {item.sku}
-                          </TableCell>
-                          <TableCell>{item.productName}</TableCell>
-                          <TableCell className="text-center">
-                            {item.quantity}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {item.price}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                    <TableFooter>
-                      <TableRow>
-                        <TableCell colSpan={3}>Sub Total</TableCell>
-                        <TableCell className="text-right">
-                          ${subtotal.toFixed(2)}
-                        </TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell colSpan={3}>Discount</TableCell>
-                        <TableCell className="text-right">
-                          {results.invoice.discount === "hidden"
-                            ? "Restricted"
-                            : `$${results.invoice.discount.toFixed(2)}`}
-                        </TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell colSpan={3}>Tax</TableCell>
-                        <TableCell className="text-right">
-                          ${tax.toFixed(2)}
-                        </TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell colSpan={3}>Total</TableCell>
-                        <TableCell className="text-right">
-                          ${total.toFixed(2)}
-                        </TableCell>
-                      </TableRow>
-                    </TableFooter>
-                  </Table>
-                </Card>
-
-                <div className="mt-6 text-lg font-semibold">
-                  Total: ${results.invoice.totalAmount.toFixed(2)}
-                </div>
-
-                <div className="mt-4">
-                  <p>
-                    Discount:{" "}
+            <Table>
+              <TableCaption>
+               Order History
+              </TableCaption>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-25">SKU</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Quantity</TableHead>
+                  <TableHead className="text-right">Price</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {results.invoice.items.map((item) => (
+                  <TableRow key={item.sku}>
+                    <TableCell className="font-medium">{item.sku}</TableCell>
+                    <TableCell>{item.productName}</TableCell>
+                    <TableCell className="text-center">
+                      {item.quantity}
+                    </TableCell>
+                    <TableCell className="text-right">{item.price}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+              <TableFooter>
+                <TableRow>
+                  <TableCell colSpan={3}>Sub Total</TableCell>
+                  <TableCell className="text-right">
+                    ${subtotal.toFixed(2)}
+                  </TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell colSpan={3}>Discount</TableCell>
+                  <TableCell className="text-right">
                     {results.invoice.discount === "hidden"
                       ? "Restricted"
                       : `$${results.invoice.discount.toFixed(2)}`}
-                  </p>
-
-                  <p>
-                    Internal Cost:{" "}
+                  </TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell colSpan={3}>Tax</TableCell>
+                  <TableCell className="text-right">
+                    ${tax.toFixed(2)}
+                  </TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell colSpan={3}>Total</TableCell>
+                  <TableCell className="text-right">
+                    ${total.toFixed(2)}
+                  </TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell colSpan={3}>Line Price</TableCell>
+                  <TableCell className="text-right">
                     {results.invoice.internalCost === "hidden"
                       ? "Restricted"
                       : `$${results.invoice.internalCost.toFixed(2)}`}
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <>
-                {/* Alert Component */}
-                {failedRows.length > 0 ? (
-                  <Alert
-                    variant="destructive"
-                    className="max-w my-3 border-red-600 bg-red-50"
-                  >
-                    <AlertTriangleIcon />
-                    <AlertDescription>
-                      {failedRows[0].name}:{" "}
-                      {failedRows[0].stockError
-                        ? buyerErrorMessage(failedRows[0].stockError)
-                        : "Something went wrong checking stock."}
-                      {failedRows.length > 1 &&
-                        ` (${failedRows.length} items affected)`}
-                    </AlertDescription>
-                  </Alert>
-                ) : (
-                  <Alert className="max-w bg-orange-200 text-black dark:border-amber-900 my-3 dark:bg-apollo-dark dark:text-apollo-light">
-                    <AlertTriangleIcon />
-                    <AlertDescription className="text-color-light">
-                      Stock data may be a few hours old, please confirm before
-                      ordering.
-                    </AlertDescription>
-                  </Alert>
-                )}
-
-                {/* Table Component */}
-                <Table>
-                  <TableCaption>Quote Results</TableCaption>
-
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>SKU</TableHead>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Qty</TableHead>
-                      <TableHead>Price</TableHead>
-                      <TableHead>Stock</TableHead>
-                      <TableHead>Lead Time</TableHead>
-                      <TableHead>Warehouse</TableHead>
-                    </TableRow>
-                  </TableHeader>
-
-                  <TableBody>
-                    {results.quotes.map((row, index) => (
-                      <TableRow key={index}>
-                        <TableCell className="font-medium">
-                          {row.sku ?? "—"}
-                        </TableCell>
-
-                        <TableCell>{row.name ?? row.rawText ?? "—"}</TableCell>
-
-                        <TableCell>{row.quantity ?? "—"}</TableCell>
-
-                        <TableCell>
-                          {row.price != null ? `${row.price.toFixed(2)}` : "—"}
-                        </TableCell>
-
-                        <TableCell>
-                          {row.status === "unmatched" ? (
-                            <div className="text-red-900">
-                              <p>{row.matchError?.message}</p>
-
-                              {row.suggestions &&
-                                row.suggestions.length > 0 && (
-                                  <ul>
-                                    {row.suggestions.map((match) => (
-                                      <li key={match.product.sku}>
-                                        {match.product.name}
-                                      </li>
-                                    ))}
-                                  </ul>
-                                )}
-                            </div>
-                          ) : typeof row.stock === "number" ? (
-                            <>
-                              {row.stock}
-
-                              {row.calculatedAt && (
-                                <div className="text-xs text-gray-600">
-                                  as of{" "}
-                                  {new Date(
-                                    row.calculatedAt,
-                                  ).toLocaleTimeString([], {
-                                    hour: "numeric",
-                                    minute: "2-digit",
-                                  })}
-                                </div>
-                              )}
-                            </>
-                          ) : row.stock === "hidden" ? (
-                            "—"
-                          ) : row.stock === "error" ? (
-                            <span className="text-red-900">
-                              {row.stockError
-                                ? buyerErrorMessage(row.stockError)
-                                : "Stock check failed."}
-                            </span>
-                          ) : (
-                            <span className="text-red-900">
-                              {buyerErrorMessage(row.stock)}
-                            </span>
-                          )}
-                        </TableCell>
-
-                        <TableCell>
-                          {row.leadTime != null
-                            ? `${row.leadTime} ${
-                                row.leadTime === 1 ? "day" : "days"
-                              }`
-                            : "—"}
-                        </TableCell>
-
-                        <TableCell>
-                          {row.warehouse === "hidden"
-                            ? "Restricted"
-                            : (row.warehouse ?? "—")}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </>
-            )}
-          </>
-        )}
+                  </TableCell>
+                </TableRow>
+              </TableFooter>
+            </Table>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
