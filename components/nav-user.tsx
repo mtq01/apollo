@@ -40,10 +40,10 @@ export function NavUser() {
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
-              <SidebarMenuButton size="lg" className="aria-expanded:bg-muted" />
+              <SidebarMenuButton size="lg" className="bg-apollo-light cursor-pointer text-apollo-dark aria-expanded:bg-muted" />
             }
           >
-            <Avatar className="size-8 rounded-lg grayscale">
+            <Avatar className="size-8 rounded-lg">
               {account && (
                 <AvatarImage src={account.avatarUrl} alt={account.name} />
               )}

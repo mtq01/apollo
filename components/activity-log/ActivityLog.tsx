@@ -38,13 +38,15 @@ function DisplayActivity({ events }: { events: ActivityEvent[] }) {
         const date = new Date(activity.timestamp);
         return (
           <Alert key={activity.id} className="max-w-md">
-            <AlertTitle className="font-bold text-md tracking-normal">{activity.message}</AlertTitle>
-            <AlertDescription className="tracking-normal">
+            <AlertTitle className="tracking-normal font-bold text-xs">
               {date.toLocaleDateString([], {
                 month: "long",
                 day: "numeric",
                 year: "numeric",
               })}
+            </AlertTitle>
+            <AlertDescription className="tracking-normal">
+              {activity.message}
             </AlertDescription>
             <AlertAction>
               <Badge variant="outline">

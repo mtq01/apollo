@@ -15,9 +15,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import {
-  LayoutDashboardIcon,
   ShoppingCartIcon,
-  LogInIcon,
   FlaskConicalIcon,
   CommandIcon,
 } from "lucide-react"
@@ -25,19 +23,9 @@ import {
 const data = {
   navMain: [
     {
-      title: "Dashboard",
-      url: "/dashboard",
-      icon: <LayoutDashboardIcon />,
-    },
-    {
       title: "Reorder",
-      url: "/reorder",
+      url: "/",
       icon: <ShoppingCartIcon />,
-    },
-    {
-      title: "Login",
-      url: "/login",
-      icon: <LogInIcon />,
     },
     {
       title: "Claude Test",

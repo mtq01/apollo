@@ -1,25 +1,21 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { DM_Sans, Outfit } from "next/font/google";
 import "./globals.css";
-import { Roboto } from "next/font/google";
 import { AccountProvider } from "@/components/account/AccountProvider";
+import { ActivityProvider } from "@/components/activity-log/ActivityProvider";
 import { AppSidebar } from "@/components/app-sidebar";
+import { ActivitySidebar } from "@/components/activity-sidebar";
 import { SiteHeader } from "@/components/site-header";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
-// fonts
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// fonts — DM Sans for body, Outfit for headings
+const dmSans = DM_Sans({
+  variable: "--font-dm-sans",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
-const roboto = Roboto({
-  variable: "--font-roboto",
+const outfit = Outfit({
+  variable: "--font-outfit",
   subsets: ["latin"],
 });
 
@@ -38,24 +34,27 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${roboto.variable} h-full antialiased`}
+      className={`${dmSans.variable} ${outfit.variable} h-full antialiased`}
     >
       <body>
         <AccountProvider>
-          <SidebarProvider
-            style={
-              {
-                "--sidebar-width": "calc(var(--spacing) * 72)",
-                "--header-height": "calc(var(--spacing) * 12)",
-              } as React.CSSProperties
-            }
-          >
-            <AppSidebar variant="inset" />
-            <SidebarInset>
-              <SiteHeader />
-              <main className="flex-1">{children}</main>
-            </SidebarInset>
-          </SidebarProvider>
+          <ActivityProvider>
+            <SidebarProvider
+              style={
+                {
+                  "--sidebar-width": "calc(var(--spacing) * 72)",
+                  "--header-height": "calc(var(--spacing) * 12)",
+                } as React.CSSProperties
+              }
+            >
+              <AppSidebar variant="inset" />
+              <SidebarInset>
+                <SiteHeader />
+                <main className="flex-1">{children}</main>
+              </SidebarInset>
+              <ActivitySidebar />
+            </SidebarProvider>
+          </ActivityProvider>
         </AccountProvider>
       </body>
     </html>
