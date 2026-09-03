@@ -140,7 +140,7 @@ export type InvoiceField = "discount" | "internalCost";
 export interface Invoice {
   id: string;
   accountId: number;
-  items: { sku: string; quantity: number; price: number }[];
+  items: { sku: string; quantity: number; price: number; productName: string; }[];
   totalAmount: number;
   discount: number;
   internalCost: number;
@@ -156,11 +156,12 @@ export interface InvoiceRequest {
 export interface VisibleInvoice {
   id: string;
   accountId: number;
-  items: { sku: string; quantity: number; price: number }[];
+  items: { sku: string; quantity: number; price: number; productName: string; }[];
   totalAmount: number;
   discount: number | "hidden";
   internalCost: number | "hidden";
   timestamp: string;
+  events: ActivityEvent[];
 }
 
 export interface InvoiceResponse {

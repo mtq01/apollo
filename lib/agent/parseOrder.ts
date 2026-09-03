@@ -1,13 +1,31 @@
 import { Anthropic } from "@anthropic-ai/sdk";
 import { record_items, recordItemsSchema } from "@/lib/tools/recordItemsTool";
 import { get_order_history } from "@/lib/tools/getOrderHistoryTool";
+import { get_invoice } from "@/lib/tools/getInvoiceTool";
+import { z } from "zod";
+
+//A schema is a set of rules describing what data should look like.
+const invoiceSchema = z.object({
+  invoiceId: z.string(),
+});
 
 import { getOrderHistory } from "@/lib/erp/order";
 import type { UserContext } from "@/types";
 
+type ParsedOrder =
+   {
+      type: "invoice";
+      invoiceId: string;
+    }
+  | {
+      type: "products";
+      products: z.infer<typeof recordItemsSchema>["products"];
+      summary: z.infer<typeof recordItemsSchema>["summary"];
+    };
+
 const anthropic = new Anthropic();
 
-export async function parseOrder(text: string, account: UserContext) {
+export async function parseOrder(text: string, account: UserContext): Promise<ParsedOrder> {
   const messages: Anthropic.MessageParam[] = [
     {
       role: "user",
@@ -29,7 +47,7 @@ export async function parseOrder(text: string, account: UserContext) {
       temperature: 0,
 
 
-      tools: [record_items, get_order_history],
+      tools: [record_items, get_order_history, get_invoice],
 
       tool_choice: {
         type: "any",
@@ -74,6 +92,27 @@ export async function parseOrder(text: string, account: UserContext) {
       continue;
     }
 
+    // Check if Claude called get_invoice
+    const invoiceToolUse = message.content.find(
+      (block): block is Anthropic.ToolUseBlock =>
+        block.type === "tool_use" && block.name === "get_invoice",
+    );
+
+    if (invoiceToolUse) {
+      const result = invoiceSchema.safeParse(invoiceToolUse.input);
+
+      if (!result.success) {
+        console.error(result.error);
+        throw new Error("Claude returned the wrong invoice shape");
+      }
+
+      return {
+        type: "invoice",
+        invoiceId: result.data.invoiceId,
+      };
+    }
+
+
     // Check if Claude called record_items
     const recordedItems = message.content.find(
       (block): block is Anthropic.ToolUseBlock =>
@@ -90,7 +129,11 @@ export async function parseOrder(text: string, account: UserContext) {
       }
 
       // Claude has finished parsing the order.
-      return result.data;
+      // ... means take everything inside result.data and copy it into this new object.
+      return {
+        type: "products",
+        ...result.data,
+      };
     }
 
     // Claude didn't call either tool.
