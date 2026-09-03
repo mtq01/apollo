@@ -5,6 +5,7 @@ import type { Product, UserContext, ErrorType, ForcedFailure } from "@/types";
 import { cacheTag } from "next/cache";
 import { parseOrder } from "@/lib/agent/parseOrder";
 import { lookupProduct } from "@/lib/erp/productLookup";
+import { lookUpInvoice } from "@/lib/erp/invoice";
 import { z } from "zod";
 import { suggestAlternatives } from "@/lib/agent/suggestAlternatives";
 
@@ -124,6 +125,30 @@ export async function POST(request: Request) {
     );
   }
 
+  if (parsed.type === "invoice") {
+  const invoiceResult = await lookUpInvoice({
+    invoiceId: parsed.invoiceId,
+    accountId: account.id,
+  });
+
+  if (invoiceResult.error || !invoiceResult.invoice) {
+    return Response.json(
+      {
+        error: invoiceResult.error ?? {
+          type: "request failed",
+          message: "Couldn't retrieve that invoice.",
+        },
+      },
+      { status: 400 },
+    );
+  }
+
+  return Response.json({
+    type: "invoice",
+    invoice: invoiceResult.invoice,
+  });
+}
+
   const quotes = [];
   // Each time round, the loop body is a fresh scope, so `const product` isn't being reassigned.
 
@@ -188,5 +213,8 @@ export async function POST(request: Request) {
       });
     }
   }
-  return Response.json(quotes);
+return Response.json({
+  type: "quotes",
+  quotes,
+});
 }
