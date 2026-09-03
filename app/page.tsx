@@ -1,50 +1,23 @@
 // reorder page
 "use client";
 
-import { useContext, useEffect, useState } from "react";
+import { useContext, useState } from "react";
 import Loader from "@/components/Loader";
 import ErrorMessage from "@/components/ErrorMessage";
 import { buyerErrorMessage } from "@/lib/erp/errorMessages";
-import {
-  ErrorType,
-  ActivityEvent,
-  ForcedFailure,
-  Product,
-  VisibleInvoice,
-} from "@/types";
+import { ErrorType, ActivityEvent, ForcedFailure, Product } from "@/types";
 import { AccountContext } from "@/components/account/AccountContext";
-import { ActivityContext } from "@/components/activity-log/ActivityContext";
 import {
   DraftOrderContext,
   type DraftLine,
 } from "@/components/draft-order/DraftOrderContext";
 import { DraftOrder } from "@/components/draft-order/DraftOrder";
-// shad components
-import {
-  TableCaption,
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell,
-  TableFooter,
-} from "@/components/ui/table";
 import {
   NativeSelect,
   NativeSelectOption,
 } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-// card import
-import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardAction,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 
 type QuoteRow = {
   // fields for a normal, successfully matched product
@@ -65,18 +38,6 @@ type QuoteRow = {
   matchError?: ErrorType; // why it didnt match, plain english
   suggestions?: { product: Product; score: number }[]; // cloe-guess products, so the buyer can pick one instead of a dead end
 };
-
-type QuoteResults = {
-  type: "quotes";
-  quotes: QuoteRow[];
-};
-
-type InvoiceResults = {
-  type: "invoice";
-  invoice: VisibleInvoice;
-};
-
-type Results = QuoteResults | InvoiceResults;
 
 // a chunk that is just a product code, optionally with a quantity:
 // "PER-2284", "PER-2284 x2", "2 PER-2284". inv-/order-/po- are excluded so a
@@ -106,59 +67,18 @@ function parseSkuList(
   return items;
 }
 
-// convert date/time to simple format
-function formatInvoiceDate(timestamp: string) {
-  const date = new Date(timestamp);
-  const dateStr = date.toLocaleDateString("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-  const timeStr = date.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "numeric",
-  });
-  return `${dateStr} at ${timeStr}`;
-}
-
 export default function Reorder() {
   // Create Loading State, Error State, Text State, and Results State
 
   //get the accountId from the context
   const { accountId } = useContext(AccountContext);
-  const { setEvents } = useContext(ActivityContext);
   const { addLines } = useContext(DraftOrderContext);
   const [isLoading, setLoading] = useState(false);
   const [error, setError] = useState<ErrorType | null>(null);
   const [text, setText] = useState("");
-  const [results, setResults] = useState<Results | null>(null);
   // rows we couldn't add straight to the draft (catalog miss or ERP miss)
   const [unmatched, setUnmatched] = useState<QuoteRow[]>([]);
   const [forceFailure, setForceFailure] = useState<ForcedFailure | null>(null);
-
-  // an invoice lookup shows its own activity; the draft handles its own.
-  useEffect(() => {
-    if (results?.type === "invoice") setEvents(results.invoice.events);
-  }, [results, setEvents]);
-
-  // invoice tax calculation
-  const subtotal =
-    results?.type === "invoice"
-      ? results.invoice.items.reduce(
-          (sum, item) => sum + item.price * item.quantity,
-          0,
-        )
-      : 0;
-
-  const discountAmount =
-    results?.type === "invoice"
-      ? results.invoice.discount === "hidden"
-        ? 0
-        : results.invoice.discount
-      : 0;
-
-  const tax = (subtotal - discountAmount) * 0.07;
-  const total = subtotal - discountAmount + tax;
 
   // Look up whatever was pasted and fold the result into the draft order.
   const getQuote = async () => {
@@ -196,8 +116,28 @@ export default function Reorder() {
         return;
       }
 
+      // a PO / invoice lookup: drop its line items straight into the draft,
+      // same as reordering a past order. no card.
       if (data?.type === "invoice") {
-        setResults(data);
+        const items = data.invoice?.items ?? [];
+        if (items.length > 0) {
+          addLines(
+            items.map(
+              (it: {
+                sku: string;
+                productName: string;
+                quantity: number;
+              }): DraftLine => ({
+                sku: it.sku,
+                productName: it.productName,
+                quantity: it.quantity,
+                source: "past-order",
+              }),
+            ),
+          );
+        }
+        setUnmatched([]);
+        setText("");
         return;
       }
 
@@ -228,7 +168,6 @@ export default function Reorder() {
       }
 
       setUnmatched(leftover);
-      setResults(null);
       setText("");
     } catch {
       setError({
@@ -378,82 +317,6 @@ export default function Reorder() {
         </div>
       )}
 
-      {results?.type === "invoice" && (
-        <div className="w-full">
-          {/* Invoice Card ++++++++++++++++++++ */}
-          <Card className="relative mx-auto w-full max-w-sm">
-            <CardHeader>
-              <CardAction>
-                <Badge variant="secondary">Paid</Badge>
-              </CardAction>
-              <CardTitle>Purchase Order: {results.invoice.id}</CardTitle>
-              <CardDescription> Submitted: {formatInvoiceDate(results.invoice.timestamp)}</CardDescription>
-            </CardHeader>
-
-            <Table>
-              <TableCaption>
-               Order History
-              </TableCaption>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-25">SKU</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Quantity</TableHead>
-                  <TableHead className="text-right">Price</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {results.invoice.items.map((item) => (
-                  <TableRow key={item.sku}>
-                    <TableCell className="font-medium">{item.sku}</TableCell>
-                    <TableCell>{item.productName}</TableCell>
-                    <TableCell className="text-center">
-                      {item.quantity}
-                    </TableCell>
-                    <TableCell className="text-right">{item.price}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-              <TableFooter>
-                <TableRow>
-                  <TableCell colSpan={3}>Sub Total</TableCell>
-                  <TableCell className="text-right">
-                    ${subtotal.toFixed(2)}
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell colSpan={3}>Discount</TableCell>
-                  <TableCell className="text-right">
-                    {results.invoice.discount === "hidden"
-                      ? "Restricted"
-                      : `$${results.invoice.discount.toFixed(2)}`}
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell colSpan={3}>Tax</TableCell>
-                  <TableCell className="text-right">
-                    ${tax.toFixed(2)}
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell colSpan={3}>Total</TableCell>
-                  <TableCell className="text-right">
-                    ${total.toFixed(2)}
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell colSpan={3}>Line Price</TableCell>
-                  <TableCell className="text-right">
-                    {results.invoice.internalCost === "hidden"
-                      ? "Restricted"
-                      : `$${results.invoice.internalCost.toFixed(2)}`}
-                  </TableCell>
-                </TableRow>
-              </TableFooter>
-            </Table>
-          </Card>
-        </div>
-      )}
     </div>
   );
 }
