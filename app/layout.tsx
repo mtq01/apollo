@@ -3,6 +3,7 @@ import { DM_Sans, Outfit } from "next/font/google";
 import "./globals.css";
 import { AccountProvider } from "@/components/account/AccountProvider";
 import { ActivityProvider } from "@/components/activity-log/ActivityProvider";
+import { DraftOrderProvider } from "@/components/draft-order/DraftOrderProvider";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ActivitySidebar } from "@/components/activity-sidebar";
 import { SiteHeader } from "@/components/site-header";
@@ -39,21 +40,23 @@ export default function RootLayout({
       <body>
         <AccountProvider>
           <ActivityProvider>
-            <SidebarProvider
-              style={
-                {
-                  "--sidebar-width": "calc(var(--spacing) * 72)",
-                  "--header-height": "calc(var(--spacing) * 12)",
-                } as React.CSSProperties
-              }
-            >
-              <AppSidebar variant="inset" />
-              <SidebarInset>
-                <SiteHeader />
-                <main className="flex-1">{children}</main>
-              </SidebarInset>
-              <ActivitySidebar />
-            </SidebarProvider>
+            <DraftOrderProvider>
+              <SidebarProvider
+                style={
+                  {
+                    "--sidebar-width": "calc(var(--spacing) * 72)",
+                    "--header-height": "calc(var(--spacing) * 12)",
+                  } as React.CSSProperties
+                }
+              >
+                <AppSidebar variant="inset" />
+                <SidebarInset>
+                  <SiteHeader />
+                  <main className="flex-1">{children}</main>
+                </SidebarInset>
+                <ActivitySidebar />
+              </SidebarProvider>
+            </DraftOrderProvider>
           </ActivityProvider>
         </AccountProvider>
       </body>
