@@ -8,6 +8,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { ActivitySidebar } from "@/components/activity-sidebar";
 import { SiteHeader } from "@/components/site-header";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { Toaster } from "@/components/ui/sonner";
 
 // fonts — DM Sans for body, Outfit for headings
 const dmSans = DM_Sans({
@@ -56,6 +57,7 @@ export default function RootLayout({
                 </SidebarInset>
                 <ActivitySidebar />
               </SidebarProvider>
+              <Toaster />
             </DraftOrderProvider>
           </ActivityProvider>
         </AccountProvider>

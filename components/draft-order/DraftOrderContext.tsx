@@ -17,6 +17,9 @@ export type DraftLine = {
   productName: string;
   quantity: number;
   source: DraftLineSource;
+  // the specific PO / order it came from (e.g. "inv-1001", "order-3"), shown
+  // as a tag under the sku. on a merge the first line's ref is kept.
+  sourceRef?: string;
 };
 
 type DraftOrderContextValue = {

@@ -2,6 +2,7 @@
 "use client";
 
 import { useContext, useState } from "react";
+import { toast } from "sonner";
 import Loader from "@/components/Loader";
 import ErrorMessage from "@/components/ErrorMessage";
 import { buyerErrorMessage } from "@/lib/erp/errorMessages";
@@ -119,6 +120,7 @@ export default function Reorder() {
       // a PO / invoice lookup: drop its line items straight into the draft,
       // same as reordering a past order. no card.
       if (data?.type === "invoice") {
+        const id: string = data.invoice?.id ?? "that PO";
         const items = data.invoice?.items ?? [];
         if (items.length > 0) {
           addLines(
@@ -132,8 +134,12 @@ export default function Reorder() {
                 productName: it.productName,
                 quantity: it.quantity,
                 source: "past-order",
+                sourceRef: id,
               }),
             ),
+          );
+          toast.success(
+            `Added ${items.length} item${items.length === 1 ? "" : "s"} from ${id}`,
           );
         }
         setUnmatched([]);

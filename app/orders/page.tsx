@@ -2,6 +2,7 @@
 
 import { useContext, useEffect, useState } from "react";
 import Link from "next/link";
+import { toast } from "sonner";
 
 import { AccountContext } from "@/components/account/AccountContext";
 import { DraftOrderContext } from "@/components/draft-order/DraftOrderContext";
@@ -82,13 +83,20 @@ export default function OrdersPage() {
   }, [accountId]);
 
   function handleAdd(
+    orderId: string,
     picked: { sku: string; productName: string; quantity: number }[],
   ) {
     if (picked.length === 0) return;
-    addLines(picked.map((p) => ({ ...p, source: "past-order" as const })));
-    setAdded(
-      `Added ${picked.length} item${picked.length === 1 ? "" : "s"} to your order.`,
+    addLines(
+      picked.map((p) => ({
+        ...p,
+        source: "past-order" as const,
+        sourceRef: orderId,
+      })),
     );
+    const msg = `Added ${picked.length} item${picked.length === 1 ? "" : "s"} from ${orderId}`;
+    toast.success(msg);
+    setAdded(`${msg}.`);
   }
 
   return (
@@ -136,6 +144,7 @@ function OrderCard({
 }: {
   order: PastOrder;
   onAdd: (
+    orderId: string,
     picked: { sku: string; productName: string; quantity: number }[],
   ) => void;
 }) {
@@ -287,6 +296,7 @@ function OrderCard({
         <Button
           onClick={() =>
             onAdd(
+              order.id,
               chosen.map((i) => ({
                 sku: i.sku,
                 productName: i.productName as string,

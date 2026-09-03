@@ -271,6 +271,15 @@ export function DraftOrder({
                   <div className="font-mono text-xs text-gray-500">
                     {line.sku}
                   </div>
+                  {line.sourceRef ? (
+                    <div className="text-xs font-medium text-green-700">
+                      from {line.sourceRef}
+                    </div>
+                  ) : line.source === "suggestion" ? (
+                    <div className="text-xs font-medium text-green-700">
+                      suggested
+                    </div>
+                  ) : null}
                 </TableCell>
                 <TableCell>
                   <Input
