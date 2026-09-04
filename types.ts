@@ -100,13 +100,6 @@ export interface ActivityEvent {
 Bypasses the normal random delay/chance. */
 export type ForcedFailure = "timeout" | "not found";
 
-export interface Order {
-  id: string;
-  accountId: number;
-  items: { sku: string; quantity: number }[];
-  timestamp: string;
-}
-
 // shape of the final result this function returns
 export interface QuoteResult {
   sku: string; // product identifier
@@ -141,7 +134,14 @@ export type InvoiceField = "discount" | "internalCost";
 export interface Invoice {
   id: string;
   accountId: number;
-  items: { sku: string; quantity: number; price: number; productName: string; }[];
+  items: {
+    sku: string;
+    quantity: number;
+    productName: string;
+    price: number;
+    listPrice: number;
+    internalCost: number;
+  }[];
   totalAmount: number;
   discount: number;
   internalCost: number;
@@ -157,7 +157,14 @@ export interface InvoiceRequest {
 export interface VisibleInvoice {
   id: string;
   accountId: number;
-  items: { sku: string; quantity: number; price: number; productName: string; }[];
+  items: {
+    sku: string;
+    quantity: number;
+    productName: string;
+    price: number;
+    listPrice: number;
+    internalCost: number | "hidden";
+  }[];
   totalAmount: number;
   discount: number | "hidden";
   internalCost: number | "hidden";

@@ -5,20 +5,24 @@
     "items": [
       {
         "sku": "PER-2284",
-        "productName": "Wireless Mouse",
         "quantity": 2,
-        "price": 29.99
+        "productName": "Wireless Mouse",
+        "price": 29.99,
+        "listPrice": 29.99,
+        "internalCost": 17.99
       },
       {
         "sku": "DSP-7742",
-        "productName": "27\" Monitor",
         "quantity": 1,
-        "price": 249.99
+        "productName": "27\" Monitor",
+        "price": 249.99,
+        "listPrice": 249.99,
+        "internalCost": 149.99
       }
     ],
     "totalAmount": 309.97,
     "discount": 0,
-    "internalCost": 192.5,
+    "internalCost": 185.97,
     "restrictedFields": [
       "discount",
       "internalCost"
@@ -31,20 +35,24 @@
     "items": [
       {
         "sku": "PER-5017",
-        "productName": "Mechanical Keyboard",
         "quantity": 5,
-        "price": 80.99
+        "productName": "Mechanical Keyboard",
+        "price": 80.99,
+        "listPrice": 89.99,
+        "internalCost": 53.99
       },
       {
         "sku": "AUD-6203",
-        "productName": "Noise Cancelling Headphones",
         "quantity": 5,
-        "price": 161.99
+        "productName": "Noise Cancelling Headphones",
+        "price": 161.99,
+        "listPrice": 179.99,
+        "internalCost": 107.99
       }
     ],
     "totalAmount": 1214.9,
     "discount": 135,
-    "internalCost": 741,
+    "internalCost": 809.9,
     "restrictedFields": [
       "discount",
       "internalCost"
@@ -57,14 +65,16 @@
     "items": [
       {
         "sku": "ACC-3391",
-        "productName": "USB-C Hub",
         "quantity": 3,
-        "price": 39.99
+        "productName": "USB-C Hub",
+        "price": 39.99,
+        "listPrice": 39.99,
+        "internalCost": 23.99
       }
     ],
     "totalAmount": 119.97,
     "discount": 0,
-    "internalCost": 73.2,
+    "internalCost": 71.97,
     "restrictedFields": [
       "discount",
       "internalCost"
@@ -77,14 +87,16 @@
     "items": [
       {
         "sku": "AUD-6203",
-        "productName": "Noise Cancelling Headphones",
         "quantity": 2,
-        "price": 161.99
+        "productName": "Noise Cancelling Headphones",
+        "price": 161.99,
+        "listPrice": 179.99,
+        "internalCost": 107.99
       }
     ],
     "totalAmount": 323.98,
     "discount": 36,
-    "internalCost": 197.6,
+    "internalCost": 215.98,
     "restrictedFields": [
       "discount",
       "internalCost"
@@ -97,26 +109,32 @@
     "items": [
       {
         "sku": "STO-9915",
-        "productName": "Portable SSD",
         "quantity": 1,
-        "price": 119.99
+        "productName": "Portable SSD",
+        "price": 119.99,
+        "listPrice": 119.99,
+        "internalCost": 71.99
       },
       {
         "sku": "ACC-1856",
-        "productName": "Laptop Stand",
         "quantity": 2,
-        "price": 49.99
+        "productName": "Laptop Stand",
+        "price": 49.99,
+        "listPrice": 49.99,
+        "internalCost": 29.99
       },
       {
         "sku": "PER-4478",
-        "productName": "Webcam",
         "quantity": 1,
-        "price": 69.99
+        "productName": "Webcam",
+        "price": 69.99,
+        "listPrice": 69.99,
+        "internalCost": 41.99
       }
     ],
     "totalAmount": 289.96,
     "discount": 0,
-    "internalCost": 180.75,
+    "internalCost": 173.96,
     "restrictedFields": [
       "discount",
       "internalCost"
@@ -124,45 +142,93 @@
     "timestamp": "2026-08-15T16:10:00Z"
   },
   {
-    "id": "order-a6eb7c06-9590-4105-8501-34f92d2c98af",
-    "accountId": 1,
-    "items": [
-      {
-        "sku": "PER-5017",
-        "quantity": 1
-      },
-      {
-        "sku": "PER-2284",
-        "quantity": 1
-      },
-      {
-        "sku": "STO-9915",
-        "quantity": 1
-      },
-      {
-        "sku": "ACC-3391",
-        "quantity": 1
-      }
-    ],
-    "timestamp": "2026-09-03T23:54:35.222Z"
-  },
-  {
-    "id": "order-108b3219-7846-405a-9f8f-38f3572e17bd",
+    "id": "inv-2119",
     "accountId": 2,
     "items": [
       {
-        "sku": "AUD-6203",
-        "quantity": 2
+        "sku": "PER-5017",
+        "quantity": 2,
+        "productName": "Mechanical Keyboard",
+        "price": 80.99,
+        "listPrice": 89.99,
+        "internalCost": 53.99
       },
       {
         "sku": "PER-2284",
-        "quantity": 1
-      },
-      {
-        "sku": "STO-9915",
-        "quantity": 1
+        "quantity": 3,
+        "productName": "Wireless Mouse",
+        "price": 26.99,
+        "listPrice": 29.99,
+        "internalCost": 17.99
       }
     ],
-    "timestamp": "2026-09-03T23:58:12.909Z"
+    "totalAmount": 242.95,
+    "discount": 27,
+    "internalCost": 161.95,
+    "restrictedFields": [
+      "discount",
+      "internalCost"
+    ],
+    "timestamp": "2026-09-04T01:25:34.204Z"
+  },
+  {
+    "id": "inv-9028",
+    "accountId": 1,
+    "items": [
+      {
+        "sku": "PER-2284",
+        "quantity": 10,
+        "productName": "Wireless Mouse",
+        "price": 29.99,
+        "listPrice": 29.99,
+        "internalCost": 17.99
+      },
+      {
+        "sku": "PER-5017",
+        "quantity": 5,
+        "productName": "Mechanical Keyboard",
+        "price": 89.99,
+        "listPrice": 89.99,
+        "internalCost": 53.99
+      }
+    ],
+    "totalAmount": 749.85,
+    "discount": 0,
+    "internalCost": 449.85,
+    "restrictedFields": [
+      "discount",
+      "internalCost"
+    ],
+    "timestamp": "2026-09-04T01:26:19.653Z"
+  },
+  {
+    "id": "inv-1456",
+    "accountId": 2,
+    "items": [
+      {
+        "sku": "PER-2284",
+        "quantity": 10,
+        "productName": "Wireless Mouse",
+        "price": 26.99,
+        "listPrice": 29.99,
+        "internalCost": 17.99
+      },
+      {
+        "sku": "PER-5017",
+        "quantity": 7,
+        "productName": "Mechanical Keyboard",
+        "price": 80.99,
+        "listPrice": 89.99,
+        "internalCost": 53.99
+      }
+    ],
+    "totalAmount": 836.83,
+    "discount": 93,
+    "internalCost": 557.83,
+    "restrictedFields": [
+      "discount",
+      "internalCost"
+    ],
+    "timestamp": "2026-09-04T01:27:18.026Z"
   }
 ]

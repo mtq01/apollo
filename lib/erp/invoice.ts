@@ -124,7 +124,10 @@ export function visibleInvoice({
   return {
     id: invoice.id,
     accountId: invoice.accountId,
-    items: invoice.items,
+    items: invoice.items.map((item) => ({
+      ...item,
+      internalCost: canSeeInternalCost ? item.internalCost : "hidden",
+    })),
     totalAmount: invoice.totalAmount,
     discount: canSeeDiscount ? invoice.discount : "hidden",
     internalCost: canSeeInternalCost ? invoice.internalCost : "hidden",

@@ -1,20 +1,15 @@
-/* GET  lists an account's past orders, with product names filled in.
+/* GET  lists an account's past orders, with role visibility applied.
    POST places a new order: takes the draft's {sku, quantity} lines, checks
-   every sku is real, and appends it to order-history.json via addOrder. */
-import { randomUUID } from "crypto";
+   every sku is real, and appends it to invoices.json via addOrder. */
 import accounts from "@/data/accounts.json";
 import catalog from "@/data/catalog.json";
 import type { UserContext, ErrorType, Product } from "@/types";
 import { z } from "zod";
-import { addOrder, getOrderHistory } from "@/lib/erp/order";
-import { calculatePrice } from "@/lib/erp/accountRules";
-
-const productBySku = new Map((catalog as Product[]).map((p) => [p.sku, p]));
+import { addOrder, buildInvoice, getOrderHistory } from "@/lib/erp/order";
+import { visibleInvoice } from "@/lib/erp/invoice";
 
 export async function GET(request: Request) {
-  const accountId = Number(
-    new URL(request.url).searchParams.get("accountId"),
-  );
+  const accountId = Number(new URL(request.url).searchParams.get("accountId"));
 
   if (!Number.isInteger(accountId) || accountId <= 0) {
     return Response.json(
@@ -42,35 +37,13 @@ export async function GET(request: Request) {
     );
   }
 
-  const orders = await getOrderHistory(accountId);
-  // internal cost is admin-only, same rule as invoices (see visibleInvoice)
-  const showCost = account.role === "admin";
+  const invoices = await getOrderHistory(accountId);
 
-  const enriched = orders
-    .map((o) => ({
-      id: o.id,
-      timestamp: o.timestamp,
-      items: o.items.map((it) => {
-        const product = productBySku.get(it.sku);
-        return {
-          sku: it.sku,
-          quantity: it.quantity,
-          productName: product?.name ?? null,
-          // price is what this account pays; listPrice is before any
-          // contract discount, so the card can show the discount line.
-          price: product ? calculatePrice({ account, product }) : null,
-          listPrice: product?.basePrice ?? null,
-          internalCost: !product
-            ? null
-            : showCost
-              ? (product.internalCost ?? null)
-              : ("hidden" as const),
-        };
-      }),
-    }))
-    .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-
-  return Response.json({ orders: enriched });
+  return Response.json({
+    orders: invoices
+      .map((invoice) => visibleInvoice({ account, invoice }))
+      .sort((a, b) => b.timestamp.localeCompare(a.timestamp)),
+  });
 }
 
 const orderRequest = z.object({
@@ -144,12 +117,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const order = await addOrder({
-    id: `order-${randomUUID()}`,
-    accountId,
-    items: items.map((i) => ({ sku: i.sku, quantity: i.quantity })),
-    timestamp: new Date().toISOString(),
-  });
+  const invoice = await addOrder(buildInvoice({ account, items }));
 
-  return Response.json({ order });
+  return Response.json({ order: invoice });
 }
