@@ -5,7 +5,7 @@
 
 import { useCallback, useState } from "react";
 
-import { ActivityEvent } from "@/types";
+import { ActivityEvent, ActivityCategory } from "@/types";
 import { useIsBelowLg } from "@/hooks/use-mobile";
 import { ActivityContext } from "./ActivityContext";
 
@@ -24,9 +24,35 @@ export function ActivityProvider({ children }: { children: React.ReactNode }) {
     [isBelowLg],
   );
 
+  // Add one line to the log. The provider fills in the id and timestamp.
+  const logEvent = useCallback(
+    (message: string, category?: ActivityCategory) =>
+      setEvents((current) => [
+        ...current,
+        {
+          id: crypto.randomUUID(),
+          message,
+          timestamp: new Date().toISOString(),
+          category,
+        },
+      ]),
+    [],
+  );
+
+  // Empty the log.
+  const clearLog = useCallback(() => setEvents([]), []);
+
   return (
     <ActivityContext.Provider
-      value={{ events, setEvents, open, openMobile, setOpenMobile, toggle }}
+      value={{
+        events,
+        logEvent,
+        clearLog,
+        open,
+        openMobile,
+        setOpenMobile,
+        toggle,
+      }}
     >
       {children}
     </ActivityContext.Provider>

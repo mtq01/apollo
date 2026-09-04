@@ -12,7 +12,7 @@ import { revalidateTag } from "next/cache";
 */
 
 // builds one reliable path to our JSON fiile (so it works no matter where the server process runs from)
-const filePath = path.join(process.cwd(), "data", "order-history.json");
+const filePath = path.join(process.cwd(), "data", "invoices.json");
 
 export async function addOrder(order: Order): Promise<Order> {
 
