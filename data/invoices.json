@@ -31,7 +31,7 @@
     "items": [
       {
         "sku": "PER-5017",
-                "productName": "Mechanical Keyboard",
+        "productName": "Mechanical Keyboard",
         "quantity": 5,
         "price": 80.99
       },
@@ -122,5 +122,47 @@
       "internalCost"
     ],
     "timestamp": "2026-08-15T16:10:00Z"
+  },
+  {
+    "id": "order-a6eb7c06-9590-4105-8501-34f92d2c98af",
+    "accountId": 1,
+    "items": [
+      {
+        "sku": "PER-5017",
+        "quantity": 1
+      },
+      {
+        "sku": "PER-2284",
+        "quantity": 1
+      },
+      {
+        "sku": "STO-9915",
+        "quantity": 1
+      },
+      {
+        "sku": "ACC-3391",
+        "quantity": 1
+      }
+    ],
+    "timestamp": "2026-09-03T23:54:35.222Z"
+  },
+  {
+    "id": "order-108b3219-7846-405a-9f8f-38f3572e17bd",
+    "accountId": 2,
+    "items": [
+      {
+        "sku": "AUD-6203",
+        "quantity": 2
+      },
+      {
+        "sku": "PER-2284",
+        "quantity": 1
+      },
+      {
+        "sku": "STO-9915",
+        "quantity": 1
+      }
+    ],
+    "timestamp": "2026-09-03T23:58:12.909Z"
   }
 ]
