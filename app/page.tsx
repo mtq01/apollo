@@ -292,8 +292,6 @@ export default function Reorder() {
         </NativeSelectOption>
       </NativeSelect>
 
-      <DraftOrder forceFailure={forceFailure} />
-
       {isLoading && (
         <div className="flex w-full flex-col items-center gap-4 py-16">
           <Loader />
@@ -308,7 +306,7 @@ export default function Reorder() {
       {unmatched.length > 0 && (
         <div className="mb-8 w-full max-w-2xl">
           <h3 className="mb-2 text-sm font-medium text-gray-700">
-            Couldn&apos;t add these
+            Couldn't add these
           </h3>
           <ul className="flex flex-col gap-3">
             {unmatched.map((row, index) => (
@@ -356,6 +354,9 @@ export default function Reorder() {
           </ul>
         </div>
       )}
+
+      {/* DraftOrder Table Output: */}
+      <DraftOrder forceFailure={forceFailure} />
     </div>
   );
 }
