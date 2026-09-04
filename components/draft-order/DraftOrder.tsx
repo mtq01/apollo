@@ -250,19 +250,26 @@ export function DraftOrder({
   });
 
   // stock numbers older than this trigger the "confirm before ordering" msg
-  const STALE_STOCK_AFTER_MS = 2 * 60 * 60 * 1000; // 2hrs
+  const STALE_STOCK_AFTER_MS = 2 * 60 * 60 * 1000; // 2 hours
 
   const hasStaleStock = lines.some((line) => {
-  const checkedAt = pricedBySku[line.sku]?.stockLastUpdated;
-  if (
-    typeof checkedAt !== "string" ||
-    checkedAt === "hidden" ||
-    checkedAt === "error"
-  ) {
-    return false;
-  }
-  return Date.now() - new Date(checkedAt).getTime() > STALE_STOCK_AFTER_MS;
-});
+    const pricedRow = pricedBySku[line.sku];
+    const checkedAt = pricedRow?.stockLastUpdated;
+    const quotedAt = pricedRow?.calculatedAt;
+    if (
+      typeof checkedAt !== "string" ||
+      checkedAt === "hidden" ||
+      checkedAt === "error" ||
+      !quotedAt
+    ) {
+      return false;
+    }
+    // Was the stock number already old when the quote was built?
+    return (
+      new Date(quotedAt).getTime() - new Date(checkedAt).getTime() >
+      STALE_STOCK_AFTER_MS
+    );
+  });
 
   const firstFailedError = failedLines[0]
     ? pricedBySku[failedLines[0].sku]?.stockError
@@ -335,7 +342,8 @@ export function DraftOrder({
         <Alert className="my-3 border-amber-300 bg-orange-100 text-black">
           <AlertTriangleIcon />
           <AlertDescription>
-            Stock data may be a few hours old, please <strong>call</strong> to confirm before ordering. 604-236-0000
+            Stock data may be a few hours old, please <strong>call</strong> to
+            confirm before ordering. 604-236-0000
           </AlertDescription>
         </Alert>
       ) : null}
@@ -416,7 +424,6 @@ export function DraftOrder({
                           as of {formatStockCheckTime(stockCheckedAt)}
                         </div>
                       )}
-
                     </>
                   ) : stockLevel === "hidden" ? (
                     "—"
