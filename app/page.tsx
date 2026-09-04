@@ -289,6 +289,9 @@ export default function Reorder() {
         <NativeSelectOption value="not found">
           {"Force 'Not Found'"}
         </NativeSelectOption>
+        <NativeSelectOption value="stale stock">
+          {"Force 'Stale Stock'"}
+        </NativeSelectOption>
       </NativeSelect>
 
       {error && <ErrorMessage error={error} />}
@@ -348,7 +351,7 @@ export default function Reorder() {
       )}
 
       {/* DraftOrder Table Output: */}
-      <DraftOrder forceFailure={forceFailure} isLoading={isLoading}/>
+      <DraftOrder forceFailure={forceFailure} isLoading={isLoading} />
     </div>
   );
 }

@@ -44,6 +44,7 @@ type PricedRow = {
   leadTime?: number; // days until it ships
   warehouse?: string | "hidden";
   calculatedAt?: string; // when the server ran this quote
+  stockLastUpdated?: string | "hidden" | "error"; // when the ERP last refreshed this number
 };
 
 // Wait this long after the last change before re-pricing, so we don't fire a
@@ -247,6 +248,22 @@ export function DraftOrder({
     const pricedRow = pricedBySku[line.sku];
     return pricedRow?.stock === "error" || pricedRow?.stockError != null;
   });
+
+  // stock numbers older than this trigger the "confirm before ordering" msg
+  const STALE_STOCK_AFTER_MS = 2 * 60 * 60 * 1000; // 2hrs
+
+  const hasStaleStock = lines.some((line) => {
+  const checkedAt = pricedBySku[line.sku]?.stockLastUpdated;
+  if (
+    typeof checkedAt !== "string" ||
+    checkedAt === "hidden" ||
+    checkedAt === "error"
+  ) {
+    return false;
+  }
+  return Date.now() - new Date(checkedAt).getTime() > STALE_STOCK_AFTER_MS;
+});
+
   const firstFailedError = failedLines[0]
     ? pricedBySku[failedLines[0].sku]?.stockError
     : undefined;
@@ -314,14 +331,14 @@ export function DraftOrder({
               ` (${failedLines.length} items affected)`}
           </AlertDescription>
         </Alert>
-      ) : (
+      ) : hasStaleStock ? (
         <Alert className="my-3 border-amber-300 bg-orange-100 text-black">
           <AlertTriangleIcon />
           <AlertDescription>
-            Stock data may be a few hours old, please confirm before ordering.
+            Stock data may be a few hours old, please <strong>call</strong> to confirm before ordering. 604-236-0000
           </AlertDescription>
         </Alert>
-      )}
+      ) : null}
 
       <Table>
         <TableHeader>
@@ -343,6 +360,12 @@ export function DraftOrder({
             const pricedRow = pricedBySku[line.sku];
             const unitPrice = pricedRow?.price;
             const stockLevel = pricedRow?.stock;
+            const stockCheckedAt =
+              typeof pricedRow?.stockLastUpdated === "string" &&
+              pricedRow.stockLastUpdated !== "hidden" &&
+              pricedRow.stockLastUpdated !== "error"
+                ? pricedRow.stockLastUpdated
+                : pricedRow?.calculatedAt;
             return (
               <TableRow key={line.sku}>
                 {/* Name, sku, and a green source tag for PO/order/suggestion. */}
@@ -388,11 +411,12 @@ export function DraftOrder({
                   {typeof stockLevel === "number" ? (
                     <>
                       {stockLevel}
-                      {pricedRow?.calculatedAt && (
+                      {stockCheckedAt && (
                         <div className="text-xs text-gray-600">
-                          as of {formatStockCheckTime(pricedRow.calculatedAt)}
+                          as of {formatStockCheckTime(stockCheckedAt)}
                         </div>
                       )}
+
                     </>
                   ) : stockLevel === "hidden" ? (
                     "—"

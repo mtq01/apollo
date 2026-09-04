@@ -15,7 +15,7 @@ const userRequest = z.object({
     .int("The account id must be a whole number")
     .positive("the account id must be a positive number"),
   // the value must be exactly one of these strings, nothing else. z.enum() is for strings only
-  forceFailure: z.enum(["timeout", "not found"]).optional(),
+  forceFailure: z.enum(["timeout", "not found", "stale stock"]).optional(),
   //These error messages are for us, the User will just receive a generic  "Please log in" message.
 });
 

@@ -26,7 +26,7 @@ const itemsRequest = z.object({
     )
     .min(1, "Add at least one item."),
   // only sent from the demo dropdown; forces the ERP call to fail
-  forceFailure: z.enum(["timeout", "not found"]).optional(),
+  forceFailure: z.enum(["timeout", "not found", "stale stock"]).optional(),
 });
 
 export async function POST(request: Request) {
