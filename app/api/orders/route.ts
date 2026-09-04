@@ -1,15 +1,32 @@
-/* GET  lists an account's past orders, with product names filled in.
-   POST places a new order: takes the draft's {sku, quantity} lines, checks
-   every sku is real, and appends it to order-history.json via addOrder. */
-import { randomUUID } from "crypto";
+/* 
+GET  lists an account's past orders. Each one is a stored invoice, so the
+        route just reads them and hides fields the account may not see.
+
+POST places a new order: takes the draft's {sku, quantity} lines, checks
+        every sku is real, prices the whole order once, and saves it as a full
+        invoice in invoices.json. 
+*/
 import accounts from "@/data/accounts.json";
 import catalog from "@/data/catalog.json";
-import type { UserContext, ErrorType, Product } from "@/types";
+import type { UserContext, ErrorType, Product, Invoice } from "@/types";
 import { z } from "zod";
-import { addOrder, getOrderHistory } from "@/lib/erp/order";
-import { calculatePrice } from "@/lib/erp/accountRules";
+import {
+  getAccountInvoices,
+  getAllInvoices,
+  saveInvoice,
+  visibleInvoice,
+} from "@/lib/erp/invoice";
+import { summarizeOrder } from "@/lib/erp/summarizeOrder";
 
-const productBySku = new Map((catalog as Product[]).map((p) => [p.sku, p]));
+// Find the highest inv-<n> id we have and return the next one.
+function nextInvoiceId(existing: Invoice[]): string {
+  const numbers = existing
+    .map((invoice) => /^inv-(\d+)$/.exec(invoice.id)?.[1])
+    .filter((digits): digits is string => digits != null)
+    .map(Number);
+  const highest = numbers.length > 0 ? Math.max(...numbers) : 1000;
+  return `inv-${highest + 1}`;
+}
 
 export async function GET(request: Request) {
   const accountId = Number(
@@ -42,35 +59,13 @@ export async function GET(request: Request) {
     );
   }
 
-  const orders = await getOrderHistory(accountId);
-  // internal cost is admin-only, same rule as invoices (see visibleInvoice)
-  const showCost = account.role === "admin";
-
-  const enriched = orders
-    .map((o) => ({
-      id: o.id,
-      timestamp: o.timestamp,
-      items: o.items.map((it) => {
-        const product = productBySku.get(it.sku);
-        return {
-          sku: it.sku,
-          quantity: it.quantity,
-          productName: product?.name ?? null,
-          // price is what this account pays; listPrice is before any
-          // contract discount, so the card can show the discount line.
-          price: product ? calculatePrice({ account, product }) : null,
-          listPrice: product?.basePrice ?? null,
-          internalCost: !product
-            ? null
-            : showCost
-              ? (product.internalCost ?? null)
-              : ("hidden" as const),
-        };
-      }),
-    }))
+  // Read this account's stored invoices and hide fields by role. Newest first.
+  const invoices = await getAccountInvoices(accountId);
+  const orders = invoices
+    .map((invoice) => visibleInvoice({ account, invoice }))
     .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 
-  return Response.json({ orders: enriched });
+  return Response.json({ orders });
 }
 
 const orderRequest = z.object({
@@ -144,12 +139,24 @@ export async function POST(request: Request) {
     );
   }
 
-  const order = await addOrder({
-    id: `order-${randomUUID()}`,
-    accountId,
-    items: items.map((i) => ({ sku: i.sku, quantity: i.quantity })),
-    timestamp: new Date().toISOString(),
-  });
+  // Price the whole order once, in the one place that does this math.
+  const summary = summarizeOrder(account, items);
 
-  return Response.json({ order });
+  const invoice: Invoice = {
+    id: nextInvoiceId(await getAllInvoices()),
+    accountId,
+    items: summary.lines,
+    subtotal: summary.subtotal,
+    discount: summary.discount,
+    tax: summary.tax,
+    totalAmount: summary.totalAmount,
+    internalCost: summary.internalCost,
+    restrictedFields: ["discount", "internalCost"],
+    timestamp: new Date().toISOString(),
+  };
+
+  await saveInvoice(invoice);
+
+  // The client reads data.order.id, so return the invoice under "order".
+  return Response.json({ order: invoice });
 }
