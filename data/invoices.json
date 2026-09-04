@@ -7,18 +7,24 @@
         "sku": "PER-2284",
         "productName": "Wireless Mouse",
         "quantity": 2,
-        "price": 29.99
+        "price": 29.99,
+        "listPrice": 29.99,
+        "internalCost": 17.99
       },
       {
         "sku": "DSP-7742",
         "productName": "27\" Monitor",
         "quantity": 1,
-        "price": 249.99
+        "price": 249.99,
+        "listPrice": 249.99,
+        "internalCost": 149.99
       }
     ],
-    "totalAmount": 309.97,
+    "subtotal": 309.97,
     "discount": 0,
-    "internalCost": 192.5,
+    "tax": 21.7,
+    "totalAmount": 331.67,
+    "internalCost": 185.97,
     "restrictedFields": [
       "discount",
       "internalCost"
@@ -31,20 +37,26 @@
     "items": [
       {
         "sku": "PER-5017",
-                "productName": "Mechanical Keyboard",
+        "productName": "Mechanical Keyboard",
         "quantity": 5,
-        "price": 80.99
+        "price": 80.99,
+        "listPrice": 89.99,
+        "internalCost": 53.99
       },
       {
         "sku": "AUD-6203",
         "productName": "Noise Cancelling Headphones",
         "quantity": 5,
-        "price": 161.99
+        "price": 161.99,
+        "listPrice": 179.99,
+        "internalCost": 107.99
       }
     ],
-    "totalAmount": 1214.9,
+    "subtotal": 1349.9,
     "discount": 135,
-    "internalCost": 741,
+    "tax": 85.04,
+    "totalAmount": 1299.94,
+    "internalCost": 809.9,
     "restrictedFields": [
       "discount",
       "internalCost"
@@ -59,12 +71,16 @@
         "sku": "ACC-3391",
         "productName": "USB-C Hub",
         "quantity": 3,
-        "price": 39.99
+        "price": 39.99,
+        "listPrice": 39.99,
+        "internalCost": 23.99
       }
     ],
-    "totalAmount": 119.97,
+    "subtotal": 119.97,
     "discount": 0,
-    "internalCost": 73.2,
+    "tax": 8.4,
+    "totalAmount": 128.37,
+    "internalCost": 71.97,
     "restrictedFields": [
       "discount",
       "internalCost"
@@ -79,12 +95,16 @@
         "sku": "AUD-6203",
         "productName": "Noise Cancelling Headphones",
         "quantity": 2,
-        "price": 161.99
+        "price": 161.99,
+        "listPrice": 179.99,
+        "internalCost": 107.99
       }
     ],
-    "totalAmount": 323.98,
+    "subtotal": 359.98,
     "discount": 36,
-    "internalCost": 197.6,
+    "tax": 22.68,
+    "totalAmount": 346.66,
+    "internalCost": 215.98,
     "restrictedFields": [
       "discount",
       "internalCost"
@@ -99,24 +119,32 @@
         "sku": "STO-9915",
         "productName": "Portable SSD",
         "quantity": 1,
-        "price": 119.99
+        "price": 119.99,
+        "listPrice": 119.99,
+        "internalCost": 71.99
       },
       {
         "sku": "ACC-1856",
         "productName": "Laptop Stand",
         "quantity": 2,
-        "price": 49.99
+        "price": 49.99,
+        "listPrice": 49.99,
+        "internalCost": 29.99
       },
       {
         "sku": "PER-4478",
         "productName": "Webcam",
         "quantity": 1,
-        "price": 69.99
+        "price": 69.99,
+        "listPrice": 69.99,
+        "internalCost": 41.99
       }
     ],
-    "totalAmount": 289.96,
+    "subtotal": 289.96,
     "discount": 0,
-    "internalCost": 180.75,
+    "tax": 20.3,
+    "totalAmount": 310.26,
+    "internalCost": 173.96,
     "restrictedFields": [
       "discount",
       "internalCost"

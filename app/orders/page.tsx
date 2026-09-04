@@ -29,6 +29,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { TAX_RATE } from "@/lib/erp/summarizeOrder";
 
 // One line of a past order, priced by GET /api/orders. productName and price
 // are null when the sku has left the catalog.
@@ -41,9 +42,6 @@ type OrderItem = {
   internalCost: number | "hidden" | null; // per unit; "hidden" for non-admins
 };
 type PastOrder = { id: string; timestamp: string; items: OrderItem[] };
-
-// Same rate the reorder page uses on invoices.
-const TAX_RATE = 0.07;
 
 // A timestamp as a short date like "Sep 3, 2026".
 function formatDate(isoTimestamp: string) {
@@ -134,7 +132,8 @@ export default function OrdersPage() {
               </Link>
             </p>
           )}
-          <ul className="flex w-full max-w-3xl flex-col gap-6">
+          {/* max-w controls the width of the table card on orders page */}
+          <ul className="flex w-full max-w flex-col gap-6">
             {orders.map((order) => (
               <li key={order.id}>
                 <OrderCard order={order} onAdd={handleAdd} />
@@ -221,10 +220,9 @@ function OrderCard({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-8" />
-            <TableHead className="w-25">SKU</TableHead>
-            <TableHead>Name</TableHead>
-            <TableHead>Quantity</TableHead>
+            <TableHead className="w-1" />
+            <TableHead className="w-1/5">SKU</TableHead>
+            <TableHead className="w-1/5">Quantity</TableHead>
             <TableHead className="text-right">Price</TableHead>
             <TableHead className="text-right">Line total</TableHead>
           </TableRow>
@@ -257,14 +255,17 @@ function OrderCard({
                   />
                 </TableCell>
 
-                <TableCell className="font-medium">{item.sku}</TableCell>
-
-                <TableCell>
-                  {item.productName ?? (
-                    <span className="text-gray-500">
-                      no longer in the catalog
-                    </span>
-                  )}
+                <TableCell className="font-medium">
+                  <div>
+                    {item.productName ?? (
+                      <span className="text-gray-500">
+                        no longer in the catalog
+                      </span>
+                    )}
+                  </div>
+                  <div className="font-mono text-xs text-gray-500">
+                    {item.sku}
+                  </div>
                 </TableCell>
 
                 {/* Editable qty, min 1 */}
@@ -303,25 +304,25 @@ function OrderCard({
         {/* Totals (see the comments above the calculations) */}
         <TableFooter>
           <TableRow>
-            <TableCell colSpan={5}>Sub Total</TableCell>
+            <TableCell colSpan={4}>Sub Total</TableCell>
             <TableCell className="text-right">${subTotal.toFixed(2)}</TableCell>
           </TableRow>
           <TableRow>
-            <TableCell colSpan={5}>Discount</TableCell>
+            <TableCell colSpan={4}>Discount</TableCell>
             <TableCell className="text-right">
               {discount > 0 ? `-$${discount.toFixed(2)}` : "$0.00"}
             </TableCell>
           </TableRow>
           <TableRow>
-            <TableCell colSpan={5}>Tax</TableCell>
+            <TableCell colSpan={4}>Tax</TableCell>
             <TableCell className="text-right">${tax.toFixed(2)}</TableCell>
           </TableRow>
           <TableRow>
-            <TableCell colSpan={5}>Total</TableCell>
+            <TableCell colSpan={4}>Total</TableCell>
             <TableCell className="text-right">${total.toFixed(2)}</TableCell>
           </TableRow>
           <TableRow>
-            <TableCell colSpan={5}>Internal Cost</TableCell>
+            <TableCell colSpan={4}>Internal Cost</TableCell>
             <TableCell className="text-right">
               {internalCostHidden
                 ? "Restricted"

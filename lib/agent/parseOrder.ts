@@ -9,7 +9,7 @@ const invoiceSchema = z.object({
   invoiceId: z.string(),
 });
 
-import { getOrderHistory } from "@/lib/erp/order";
+import { getAccountInvoices } from "@/lib/erp/invoice";
 import type { UserContext } from "@/types";
 
 type ParsedOrder =
@@ -65,11 +65,11 @@ export async function parseOrder(text: string, account: UserContext): Promise<Pa
     if (historyToolUse) {
       // Claude asked for the buyer's previous orders.
       // We already know the account, so our code uses account.id.
-      const history = await getOrderHistory(account.id);
+      const history = await getAccountInvoices(account.id);
 
       // Give Claude both:
       // 1. Its own tool request
-      // 2. The result from our real order-history lookup
+      // 2. The result from our real invoice lookup
       messages.push({
         role: "assistant",
         content: message.content,

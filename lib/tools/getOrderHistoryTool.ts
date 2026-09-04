@@ -4,7 +4,7 @@ export const get_order_history: Anthropic.Tool = {
   name: "get_order_history",
 
   description:
-    "Call this when the buyer's message implies they want to reorder something from the past, such as 'reorder what I got last time'. Use this tool before record_items so you can see the buyer's previous orders.",
+    "Call this only when the buyer explicitly asks to reorder from or view their past orders, using a phrase like 'reorder what I got last time', 'same as last month', 'show me my past orders', or 'my order history'. Do not call this for a bare name, a greeting, or text that is not clearly about past orders. It takes no arguments and returns every past order for this account. Past orders are not invoices. After calling this, call record_items with the products the buyer wants from the history.",
 
   input_schema: {
     type: "object",

@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 function DisplayActivity({ events }: { events: ActivityEvent[] }) {
   return (
     <>
-      {events.map((event) => {
+      {[...events].reverse().map((event) => {
         const date = new Date(event.timestamp);
         return (
           // key by id so React can track each card when the list changes

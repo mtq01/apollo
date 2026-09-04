@@ -26,8 +26,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { AlertTriangleIcon } from "lucide-react";
-import type { ActivityEvent, ErrorType, ForcedFailure } from "@/types";
+import { AlertTriangleIcon, CircleX } from "lucide-react";
+import type { ErrorType, ForcedFailure } from "@/types";
+import { TAX_RATE } from "@/lib/erp/summarizeOrder";
 
 /* A priced line from POST /api/quote/items, looked up by sku. Most fields are
    optional because a line can fail to price and still come back. */
@@ -43,11 +44,7 @@ type PricedRow = {
   leadTime?: number; // days until it ships
   warehouse?: string | "hidden";
   calculatedAt?: string; // when the server ran this quote
-  events?: ActivityEvent[]; // steps for the activity log
 };
-
-// Same rate the reorder page uses on invoices.
-const TAX_RATE = 0.07;
 
 // Wait this long after the last change before re-pricing, so we don't fire a
 // request on every keystroke.
@@ -70,8 +67,8 @@ export function DraftOrder({
   // The active account. Prices depend on it; actions are blocked until one is picked.
   const { accountId } = useContext(AccountContext);
 
-  // The activity log sidebar. We push the server's steps into it on each re-price.
-  const { setEvents } = useContext(ActivityContext);
+  // Write to the activity log when the order is placed or cleared.
+  const { logEvent } = useContext(ActivityContext);
 
   // The shared cart: the items plus the ways to change them.
   const { lines, setQuantity, removeLine, clear } =
@@ -104,7 +101,6 @@ export function DraftOrder({
     // Nothing to price without an account or items.
     if (!accountId || lines.length === 0) {
       setPricedBySku({});
-      setEvents([]);
       setErrorMessage(null);
       return;
     }
@@ -137,15 +133,12 @@ export function DraftOrder({
         return;
       }
 
-      // Index the priced rows by sku, and gather the activity events.
+      // Index the priced rows by sku.
       const nextPricedBySku: Record<string, PricedRow> = {};
-      const activityEvents: ActivityEvent[] = [];
       for (const quoteRow of (data.quotes ?? []) as PricedRow[]) {
         if (quoteRow.sku) nextPricedBySku[quoteRow.sku] = quoteRow;
-        if (quoteRow.events) activityEvents.push(...quoteRow.events);
       }
       setPricedBySku(nextPricedBySku);
-      setEvents(activityEvents);
     } catch {
       // Aborts land here too; only a real failure gets a message.
       if (!abortController.signal.aborted) {
@@ -154,7 +147,7 @@ export function DraftOrder({
     } finally {
       if (!abortController.signal.aborted) setIsPricing(false);
     }
-  }, [accountId, lines, forceFailure, setEvents]);
+  }, [accountId, lines, forceFailure]);
 
   // Debounce: every change clears the old timer and starts a new one, so only a pause triggers the re-price.
   useEffect(() => {
@@ -181,13 +174,21 @@ export function DraftOrder({
       });
       const data = await response.json();
       if (!response.ok) {
-        setErrorMessage(data?.error?.message ?? "Couldn't place the order.");
+        const message = data?.error?.message ?? "Couldn't place the order.";
+        setErrorMessage(message);
+        logEvent(message, "error");
         return;
       }
+      const itemWord = lines.length === 1 ? "item" : "items";
+      logEvent(
+        `Placed order ${data.order.id}, ${lines.length} ${itemWord}`,
+        "order",
+      );
       setPlacedOrderId(data.order.id);
       clear();
     } catch {
       setErrorMessage("Couldn't reach the server.");
+      logEvent("Could not reach the server", "error");
     } finally {
       setIsPlacingOrder(false);
     }
@@ -195,6 +196,7 @@ export function DraftOrder({
 
   // Empty the cart and clear any leftover messages.
   function clearDraft() {
+    if (lines.length > 0) logEvent("Cleared the cart", "order");
     clear();
     setPlacedOrderId(null);
     setErrorMessage(null);
@@ -268,11 +270,11 @@ export function DraftOrder({
   }
 
   return (
-    <section className="mb-8 w-full max-w-4xl">
+    <section className="mb-8 w-full">
       {/* Heading + Clear button */}
       <div className="mb-2 flex items-center justify-between">
         <h2 className="text-lg font-semibold">
-          Your Cart: Continue adding or removing items
+          Cart Summary
           {isPricing && (
             <span className="ml-2 text-sm font-normal text-gray-500">
               pricing…
@@ -281,9 +283,9 @@ export function DraftOrder({
         </h2>
         <button
           onClick={clearDraft}
-          className="text-sm text-gray-600 underline hover:no-underline"
+          className="text-sm text-apollo-dark hover:text-red-500 underline cursor-pointer hover:no-underline"
         >
-          Clear
+          Empty Cart
         </button>
       </div>
 
@@ -313,11 +315,11 @@ export function DraftOrder({
         <TableHeader>
           <TableRow>
             <TableHead>Item</TableHead>
-            <TableHead className="w-24">Qty</TableHead>
-            <TableHead className="text-right">Price</TableHead>
-            <TableHead>Stock</TableHead>
-            <TableHead>Lead time</TableHead>
-            <TableHead>Warehouse</TableHead>
+            <TableHead className="w-1/7">Qty</TableHead>
+            <TableHead className="w-1/7">Price</TableHead>
+            <TableHead className="w-1/7">Stock</TableHead>
+            <TableHead className="w-1/7">Lead time</TableHead>
+            <TableHead className="w-1/7">Warehouse</TableHead>
             <TableHead className="text-right">Line total</TableHead>
             <TableHead />
           </TableRow>
@@ -363,7 +365,7 @@ export function DraftOrder({
                 </TableCell>
 
                 {/* Price per unit. */}
-                <TableCell className="text-right">
+                <TableCell>
                   {typeof unitPrice === "number"
                     ? `$${unitPrice.toFixed(2)}`
                     : "—"}
@@ -420,14 +422,14 @@ export function DraftOrder({
                     : "—"}
                 </TableCell>
 
-                {/* Remove line. */}
+                {/* Remove Item line. */}
                 <TableCell>
                   <button
                     onClick={() => removeLine(line.sku)}
                     aria-label={`Remove ${line.productName}`}
-                    className="px-1 text-gray-500 hover:text-black"
+                    className="px-1 align-middle text-gray-500 hover:text-red-600"
                   >
-                    ×
+                    <CircleX size={16} className="cursor-pointer" />
                   </button>
                 </TableCell>
               </TableRow>

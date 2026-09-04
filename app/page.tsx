@@ -13,9 +13,16 @@ import ErrorMessage from "@/components/ErrorMessage";
 import { buyerErrorMessage } from "@/lib/erp/errorMessages";
 import { ErrorType, ActivityEvent, ForcedFailure, Product } from "@/types";
 import { AccountContext } from "@/components/account/AccountContext";
-import { DraftOrderContext, type DraftLine, } from "@/components/draft-order/DraftOrderContext";
+import { ActivityContext } from "@/components/activity-log/ActivityContext";
+import {
+  DraftOrderContext,
+  type DraftLine,
+} from "@/components/draft-order/DraftOrderContext";
 import { DraftOrder } from "@/components/draft-order/DraftOrder";
-import { NativeSelect, NativeSelectOption, } from "@/components/ui/native-select";
+import {
+  NativeSelect,
+  NativeSelectOption,
+} from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 
@@ -84,6 +91,7 @@ function itemCountLabel(count: number) {
 export default function Reorder() {
   const { accountId } = useContext(AccountContext);
   const { addLines } = useContext(DraftOrderContext);
+  const { logEvent } = useContext(ActivityContext);
 
   const [isLoading, setLoading] = useState(false);
   const [error, setError] = useState<ErrorType | null>(null);
@@ -103,7 +111,11 @@ export default function Reorder() {
       const skuItems = parseSkuList(text);
       const endpoint = skuItems ? "/api/quote/items" : "/api/quote";
       const body = skuItems
-        ? { accountId, items: skuItems, forceFailure: forceFailure ?? undefined }
+        ? {
+            accountId,
+            items: skuItems,
+            forceFailure: forceFailure ?? undefined,
+          }
         : { text, accountId, forceFailure: forceFailure ?? undefined };
 
       const response = await fetch(endpoint, {
@@ -114,12 +126,12 @@ export default function Reorder() {
       const data = await response.json().catch(() => null);
 
       if (!response.ok) {
-        setError(
-          data?.error ?? {
-            type: "request failed",
-            message: "Couldn't get a quote. Please try again later.",
-          },
-        );
+        const failure: ErrorType = data?.error ?? {
+          type: "request failed",
+          message: "Couldn't get a quote. Please try again later.",
+        };
+        setError(failure);
+        logEvent(failure.message, "error");
         return;
       }
 
@@ -165,6 +177,17 @@ export default function Reorder() {
       );
       const leftover = rows.filter((row) => !matched.includes(row));
 
+      // Nothing to add and nothing to fix. The text was not an order.
+      if (matched.length === 0 && leftover.length === 0) {
+        const message =
+          "That doesn't look like an order. Paste SKUs, a product list, or a PO number.";
+        setError({ type: "invalid input", message });
+        logEvent(message, "error");
+        setUnmatched([]);
+        setText("");
+        return;
+      }
+
       if (matched.length > 0) {
         const source: DraftLine["source"] = skuItems ? "manual-sku" : "paste";
         addLines(
@@ -179,6 +202,14 @@ export default function Reorder() {
         );
       }
 
+      if (leftover.length > 0) {
+        const word = leftover.length === 1 ? "item" : "items";
+        logEvent(
+          `${leftover.length} ${word} could not be added to the cart`,
+          "error",
+        );
+      }
+
       setUnmatched(leftover);
       setText("");
     } catch {
@@ -186,6 +217,7 @@ export default function Reorder() {
         type: "request failed",
         message: "Couldn't reach the server. Check your connection.",
       });
+      logEvent("Could not reach the server", "error");
     } finally {
       setLoading(false);
     }
@@ -216,7 +248,10 @@ export default function Reorder() {
         Reorder
       </h1>
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4 w-full mb-8 ">
+      <form
+        onSubmit={handleSubmit}
+        className="flex flex-col gap-4 w-full mb-8 "
+      >
         <label>
           <span className="sr-only">
             Paste a previous PO number, SKU numbers, or a list of products you
@@ -249,7 +284,9 @@ export default function Reorder() {
         }
       >
         <NativeSelectOption value="">Select Force Failure</NativeSelectOption>
-        <NativeSelectOption value="timeout">{"Force 'Timeout'"}</NativeSelectOption>
+        <NativeSelectOption value="timeout">
+          {"Force 'Timeout'"}
+        </NativeSelectOption>
         <NativeSelectOption value="not found">
           {"Force 'Not Found'"}
         </NativeSelectOption>
@@ -307,8 +344,8 @@ export default function Reorder() {
                           }}
                           className="text-left text-sm underline hover:no-underline"
                         >
-                          Add {suggestion.product.name} ({suggestion.product.sku}
-                          )
+                          Add {suggestion.product.name} (
+                          {suggestion.product.sku})
                         </button>
                       </li>
                     ))}

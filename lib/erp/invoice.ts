@@ -10,6 +10,7 @@ import type {
 import accounts from "@/data/accounts.json";
 import { promises as fs } from "fs";
 import path from "path";
+import { revalidateTag } from "next/cache";
 
 import { randomUUID } from "crypto";
 
@@ -17,7 +18,37 @@ interface AccountInvoiceParams {
   account: UserContext;
   invoice: Invoice;
 }
+
+// One path to the invoices file, so it works no matter where the server runs.
 const filePath = path.join(process.cwd(), "data", "invoices.json");
+
+// Read every stored invoice.
+export async function getAllInvoices(): Promise<Invoice[]> {
+  const raw = await fs.readFile(filePath, "utf-8");
+  return JSON.parse(raw);
+}
+
+// Read just one account's invoices. This is the account's order history.
+export async function getAccountInvoices(
+  accountId: number,
+): Promise<Invoice[]> {
+  const invoices = await getAllInvoices();
+  return invoices.filter((invoice) => invoice.accountId === accountId);
+}
+
+/* Append one invoice to the file. A placed order is saved here as a full
+   priced invoice, so readers never have to price it again. */
+export async function saveInvoice(invoice: Invoice): Promise<Invoice> {
+  const invoices = await getAllInvoices();
+  invoices.push(invoice);
+  await fs.writeFile(filePath, JSON.stringify(invoices, null, 2));
+
+  /* A new order was just saved, so any stock numbers cached under the "stock"
+     tag are out of date. Clear them so the next check looks up a fresh number. */
+  revalidateTag("stock", "max");
+
+  return invoice;
+}
 
 export async function lookUpInvoice({
   invoiceId,
@@ -37,8 +68,7 @@ export async function lookUpInvoice({
     };
   }
 
-  const raw = await fs.readFile(filePath, "utf-8");
-  const invoices: Invoice[] = JSON.parse(raw);
+  const invoices = await getAllInvoices();
 
   const invoice = invoices.find(
     (invoice) =>
@@ -73,7 +103,7 @@ export async function lookUpInvoice({
 export function visibleInvoice({
   account,
   invoice,
-  //this fucntion takes the invoice from track b, and returns a  "visible invoice" depending on the accounts role
+  // Takes a stored invoice and returns what this account is allowed to see.
 }: AccountInvoiceParams): VisibleInvoice {
   let canSeeDiscount = false;
   let canSeeInternalCost = false;
@@ -82,9 +112,9 @@ export function visibleInvoice({
 
   function addEvent(message: string, category: ActivityCategory) {
     events.push({
-      id: randomUUID(), // creates a unique 36character long v4 UUID - https://developer.mozilla.org/en-US/docs/Web/API/Crypto/randomUUID
-      message, // human-friendly description of what happened
-      timestamp: new Date().toISOString(), // when it happened
+      id: randomUUID(),
+      message,
+      timestamp: new Date().toISOString(),
       category,
     });
   }
@@ -103,30 +133,41 @@ export function visibleInvoice({
       break;
   }
   addEvent(
-    `Invoice Viewed: ${invoice.id} — $${invoice.totalAmount.toFixed(2)}`,
+    `Invoice Viewed: ${invoice.id} - $${invoice.totalAmount.toFixed(2)}`,
     "access",
   );
 
   if (!canSeeDiscount) {
     addEvent(
-      `Discount Hidden: not visible for this account's role of "${account.role}" — ${invoice.id}`,
+      `Discount Hidden: not visible for this account's role of "${account.role}" - ${invoice.id}`,
       "access",
     );
   }
 
   if (!canSeeInternalCost) {
     addEvent(
-      `Internal Cost Hidden: not visible for this account's role of "${account.role}" — ${invoice.id}`,
+      `Internal Cost Hidden: not visible for this account's role of "${account.role}" - ${invoice.id}`,
       "access",
     );
   }
-  // Return the"vibile invoice type" in full to make track b's life easier, copying "productQuotes.ts" form
+
+  // Return the full visible invoice. Discount and internal cost turn into
+  // "hidden" when this account's role is not allowed to see them.
   return {
     id: invoice.id,
     accountId: invoice.accountId,
-    items: invoice.items,
-    totalAmount: invoice.totalAmount,
+    items: invoice.items.map((line) => ({
+      sku: line.sku,
+      quantity: line.quantity,
+      price: line.price,
+      listPrice: line.listPrice,
+      productName: line.productName,
+      internalCost: canSeeInternalCost ? line.internalCost : "hidden",
+    })),
+    subtotal: invoice.subtotal,
     discount: canSeeDiscount ? invoice.discount : "hidden",
+    tax: invoice.tax,
+    totalAmount: invoice.totalAmount,
     internalCost: canSeeInternalCost ? invoice.internalCost : "hidden",
     timestamp: invoice.timestamp,
     events,
