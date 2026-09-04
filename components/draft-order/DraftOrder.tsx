@@ -9,7 +9,7 @@
   current catalog and account. */
 
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
-
+import Loader from "@/components/Loader";
 import { AccountContext } from "@/components/account/AccountContext";
 import { ActivityContext } from "@/components/activity-log/ActivityContext";
 import { DraftOrderContext } from "@/components/draft-order/DraftOrderContext";
@@ -60,13 +60,14 @@ function formatStockCheckTime(isoTimestamp: string) {
 
 export function DraftOrder({
   forceFailure,
+  isLoading,
 }: {
   // From the demo dropdown; makes the re-price fail on purpose.
   forceFailure?: ForcedFailure | null;
+  isLoading?: boolean;
 }) {
   // The active account. Prices depend on it; actions are blocked until one is picked.
   const { accountId } = useContext(AccountContext);
-
   // Write to the activity log when the order is placed or cleared.
   const { logEvent } = useContext(ActivityContext);
 
@@ -253,17 +254,28 @@ export function DraftOrder({
   // Empty cart: the "order placed" confirmation, or a hint.
   if (lines.length === 0) {
     return (
-      <section className="mb-8 w-full max-w-4xl">
-        <h2 className="mb-2 text-lg font-semibold">Your Cart</h2>
+      <section className="mb-8 w-full">
         {placedOrderId ? (
-          <p className="text-sm text-green-700">
-            Order {placedOrderId} placed.
-          </p>
+          <>
+            <h2 className="mb-2 text-lg font-semibold">Your Cart</h2>
+            <p className="text-sm text-green-700">
+              Order {placedOrderId} placed.
+            </p>
+          </>
+        ) : isLoading ? (
+          <div className="flex flex-col items-center gap-4 py-16">
+            <Loader />
+            <p className="text-lg">Getting quote...</p>
+          </div>
         ) : (
-          <p className="text-sm text-gray-600">
-            Nothing added yet. Paste SKUs or a product list above, or reorder a
-            past order.
-          </p>
+          <div className="flex flex-col items-center text-center gap-4 py-16">
+            <div className="py-16">
+              <p className="text-3xl text-gray-600">Nothing added yet.</p>
+              <p className="text-lg">
+                Paste SKUs or a product list above, or reorder a past order.
+              </p>
+            </div>
+          </div>
         )}
       </section>
     );

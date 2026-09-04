@@ -8,7 +8,6 @@
 
 import { useContext, useState } from "react";
 import { toast } from "sonner";
-import Loader from "@/components/Loader";
 import ErrorMessage from "@/components/ErrorMessage";
 import { buyerErrorMessage } from "@/lib/erp/errorMessages";
 import { ErrorType, ActivityEvent, ForcedFailure, Product } from "@/types";
@@ -292,13 +291,6 @@ export default function Reorder() {
         </NativeSelectOption>
       </NativeSelect>
 
-      {isLoading && (
-        <div className="flex w-full flex-col items-center gap-4 py-16">
-          <Loader />
-          <p className="text-lg">Getting quote...</p>
-        </div>
-      )}
-
       {error && <ErrorMessage error={error} />}
 
       {/* Rows that could not go into the cart. Each shows why, plus any
@@ -356,7 +348,7 @@ export default function Reorder() {
       )}
 
       {/* DraftOrder Table Output: */}
-      <DraftOrder forceFailure={forceFailure} />
+      <DraftOrder forceFailure={forceFailure} isLoading={isLoading}/>
     </div>
   );
 }
