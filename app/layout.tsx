@@ -57,7 +57,7 @@ export default function RootLayout({
                 </SidebarInset>
                 <ActivitySidebar />
               </SidebarProvider>
-              <Toaster />
+              <Toaster position="bottom-center"/>
             </DraftOrderProvider>
           </ActivityProvider>
         </AccountProvider>
