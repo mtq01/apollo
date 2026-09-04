@@ -100,13 +100,6 @@ export interface ActivityEvent {
 Bypasses the normal random delay/chance. */
 export type ForcedFailure = "timeout" | "not found";
 
-export interface Order {
-  id: string;
-  accountId: number;
-  items: { sku: string; quantity: number }[];
-  timestamp: string;
-}
-
 // shape of the final result this function returns
 export interface QuoteResult {
   sku: string; // product identifier
@@ -141,10 +134,19 @@ export type InvoiceField = "discount" | "internalCost";
 export interface Invoice {
   id: string;
   accountId: number;
-  items: { sku: string; quantity: number; price: number; productName: string; }[];
-  totalAmount: number;
-  discount: number;
-  internalCost: number;
+  items: {
+    sku: string;
+    quantity: number;
+    price: number; // per unit, what this account paid
+    listPrice: number; // per unit, before discount
+    internalCost: number; // per unit, our cost
+    productName: string;
+  }[];
+  subtotal: number; // sum of listPrice * quantity
+  discount: number; // sum of (listPrice - price) * quantity
+  tax: number; // (subtotal - discount) * 0.07
+  totalAmount: number; // subtotal - discount + tax
+  internalCost: number; // sum of per-line internalCost * quantity
   restrictedFields: InvoiceField[];
   timestamp: string;
 }
@@ -153,17 +155,28 @@ export interface InvoiceRequest {
   invoiceId: string;
   accountId: number;
 }
-// The shape of the result the user will be able to see, which hides certain fields depending on the account's role.
+
+// What the buyer sees. Discount and internal cost hide by role.
 export interface VisibleInvoice {
   id: string;
   accountId: number;
-  items: { sku: string; quantity: number; price: number; productName: string; }[];
-  totalAmount: number;
+  items: {
+    sku: string;
+    quantity: number;
+    price: number;
+    listPrice: number;
+    internalCost: number | "hidden"; // hidden per line for non-admins
+    productName: string;
+  }[];
+  subtotal: number;
   discount: number | "hidden";
+  tax: number;
+  totalAmount: number;
   internalCost: number | "hidden";
   timestamp: string;
   events: ActivityEvent[];
 }
+
 
 export interface InvoiceResponse {
   invoice: VisibleInvoice | null;

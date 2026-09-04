@@ -26,8 +26,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { AlertTriangleIcon } from "lucide-react";
+import { AlertTriangleIcon, CircleX } from "lucide-react";
 import type { ErrorType, ForcedFailure } from "@/types";
+import { TAX_RATE } from "@/lib/erp/summarizeOrder";
 
 /* A priced line from POST /api/quote/items, looked up by sku. Most fields are
    optional because a line can fail to price and still come back. */
@@ -44,9 +45,6 @@ type PricedRow = {
   warehouse?: string | "hidden";
   calculatedAt?: string; // when the server ran this quote
 };
-
-// Same rate the reorder page uses on invoices.
-const TAX_RATE = 0.07;
 
 // Wait this long after the last change before re-pricing, so we don't fire a
 // request on every keystroke.
@@ -272,11 +270,11 @@ export function DraftOrder({
   }
 
   return (
-    <section className="mb-8 w-full max-w-4xl">
+    <section className="mb-8 w-full">
       {/* Heading + Clear button */}
       <div className="mb-2 flex items-center justify-between">
         <h2 className="text-lg font-semibold">
-          Your Cart: Continue adding or removing items
+          Cart Summary
           {isPricing && (
             <span className="ml-2 text-sm font-normal text-gray-500">
               pricing…
@@ -285,9 +283,9 @@ export function DraftOrder({
         </h2>
         <button
           onClick={clearDraft}
-          className="text-sm text-gray-600 underline hover:no-underline"
+          className="text-sm text-apollo-dark hover:text-red-500 underline cursor-pointer hover:no-underline"
         >
-          Clear
+          Empty Cart
         </button>
       </div>
 
@@ -317,11 +315,11 @@ export function DraftOrder({
         <TableHeader>
           <TableRow>
             <TableHead>Item</TableHead>
-            <TableHead className="w-24">Qty</TableHead>
-            <TableHead className="text-right">Price</TableHead>
-            <TableHead>Stock</TableHead>
-            <TableHead>Lead time</TableHead>
-            <TableHead>Warehouse</TableHead>
+            <TableHead className="w-1/7">Qty</TableHead>
+            <TableHead className="w-1/7">Price</TableHead>
+            <TableHead className="w-1/7">Stock</TableHead>
+            <TableHead className="w-1/7">Lead time</TableHead>
+            <TableHead className="w-1/7">Warehouse</TableHead>
             <TableHead className="text-right">Line total</TableHead>
             <TableHead />
           </TableRow>
@@ -367,7 +365,7 @@ export function DraftOrder({
                 </TableCell>
 
                 {/* Price per unit. */}
-                <TableCell className="text-right">
+                <TableCell>
                   {typeof unitPrice === "number"
                     ? `$${unitPrice.toFixed(2)}`
                     : "—"}
@@ -424,14 +422,14 @@ export function DraftOrder({
                     : "—"}
                 </TableCell>
 
-                {/* Remove line. */}
+                {/* Remove Item line. */}
                 <TableCell>
                   <button
                     onClick={() => removeLine(line.sku)}
                     aria-label={`Remove ${line.productName}`}
-                    className="px-1 text-gray-500 hover:text-black"
+                    className="px-1 align-middle text-gray-500 hover:text-red-600"
                   >
-                    ×
+                    <CircleX size={16} className="cursor-pointer" />
                   </button>
                 </TableCell>
               </TableRow>
