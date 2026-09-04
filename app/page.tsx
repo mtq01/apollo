@@ -14,9 +14,15 @@ import { buyerErrorMessage } from "@/lib/erp/errorMessages";
 import { ErrorType, ActivityEvent, ForcedFailure, Product } from "@/types";
 import { AccountContext } from "@/components/account/AccountContext";
 import { ActivityContext } from "@/components/activity-log/ActivityContext";
-import { DraftOrderContext, type DraftLine, } from "@/components/draft-order/DraftOrderContext";
+import {
+  DraftOrderContext,
+  type DraftLine,
+} from "@/components/draft-order/DraftOrderContext";
 import { DraftOrder } from "@/components/draft-order/DraftOrder";
-import { NativeSelect, NativeSelectOption, } from "@/components/ui/native-select";
+import {
+  NativeSelect,
+  NativeSelectOption,
+} from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 
@@ -105,7 +111,11 @@ export default function Reorder() {
       const skuItems = parseSkuList(text);
       const endpoint = skuItems ? "/api/quote/items" : "/api/quote";
       const body = skuItems
-        ? { accountId, items: skuItems, forceFailure: forceFailure ?? undefined }
+        ? {
+            accountId,
+            items: skuItems,
+            forceFailure: forceFailure ?? undefined,
+          }
         : { text, accountId, forceFailure: forceFailure ?? undefined };
 
       const response = await fetch(endpoint, {
@@ -167,6 +177,17 @@ export default function Reorder() {
       );
       const leftover = rows.filter((row) => !matched.includes(row));
 
+      // Nothing to add and nothing to fix. The text was not an order.
+      if (matched.length === 0 && leftover.length === 0) {
+        const message =
+          "That doesn't look like an order. Paste SKUs, a product list, or a PO number.";
+        setError({ type: "invalid input", message });
+        logEvent(message, "error");
+        setUnmatched([]);
+        setText("");
+        return;
+      }
+
       if (matched.length > 0) {
         const source: DraftLine["source"] = skuItems ? "manual-sku" : "paste";
         addLines(
@@ -227,7 +248,10 @@ export default function Reorder() {
         Reorder
       </h1>
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4 w-full mb-8 ">
+      <form
+        onSubmit={handleSubmit}
+        className="flex flex-col gap-4 w-full mb-8 "
+      >
         <label>
           <span className="sr-only">
             Paste a previous PO number, SKU numbers, or a list of products you
@@ -260,7 +284,9 @@ export default function Reorder() {
         }
       >
         <NativeSelectOption value="">Select Force Failure</NativeSelectOption>
-        <NativeSelectOption value="timeout">{"Force 'Timeout'"}</NativeSelectOption>
+        <NativeSelectOption value="timeout">
+          {"Force 'Timeout'"}
+        </NativeSelectOption>
         <NativeSelectOption value="not found">
           {"Force 'Not Found'"}
         </NativeSelectOption>
@@ -318,8 +344,8 @@ export default function Reorder() {
                           }}
                           className="text-left text-sm underline hover:no-underline"
                         >
-                          Add {suggestion.product.name} ({suggestion.product.sku}
-                          )
+                          Add {suggestion.product.name} (
+                          {suggestion.product.sku})
                         </button>
                       </li>
                     ))}

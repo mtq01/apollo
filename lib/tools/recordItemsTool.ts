@@ -22,6 +22,7 @@ such as "I need nothing", "I don't need anything", or
 "I need no products", return an empty products array.
 Do not treat words like "nothing" or "anything" as product names
 when they are being used to say that the customer wants no products.
+If the message is not a product order at all, for example a person's name like "Alex" or "Mahtab", a greeting, a question, or random words with no product request in them, return an empty products array. This is different from an unrecognized product such as "wireless thingamajig", which you should still record in productGuess.name with your best guess.
 If the customer says "a" or "an" before a product, treat the quantity as 1.`,
   /*
    * input_schema is just the shape we want the json to come back as.
