@@ -98,7 +98,7 @@ export interface ActivityEvent {
 
 /* The specific failures getERPStock can be forced to throw on demand, for testing and demoing. 
 Bypasses the normal random delay/chance. */
-export type ForcedFailure = "timeout" | "not found";
+export type ForcedFailure = "timeout" | "not found" | "stale stock";
 
 // shape of the final result this function returns
 export interface QuoteResult {

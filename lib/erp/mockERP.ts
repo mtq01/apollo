@@ -31,6 +31,15 @@ export async function getERPStock(sku: string, forceFailure?: ForcedFailure): Pr
       // human readabl error msg
       throw new Error("Product not found in ERP system.");
 
+      case "stale stock": {
+        // real stock count, refreshed 3hrs ago. shows 'confirm before ordering' reminder without a random wait
+        const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
+        return {
+          stock: hashSkuToStock(sku),
+          lastUpdated: threeHoursAgo.toISOString(),
+        }
+      }
+        
     default:
       // forceFailure was undefined, so nothing was thrown here. This just exits the switch and moves on to the normal random logic below.
       break;
