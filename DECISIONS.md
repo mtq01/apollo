@@ -162,3 +162,13 @@ write it in the following format:
 - [x] **DECISION**: The `get_order_history` tool keeps its name. To a buyer, "my past orders" and "my invoices" are the same list now, and the name reads better in the tool description. It returns invoices.
 - [ ] **TODO**: `saveInvoice` does a read then write on `invoices.json` with no lock, so two orders placed at the same instant could clobber each other. Same known limit the old `addOrder` had. Fine for demo scale.
 - [ ] **TODO**: A PO line for a sku that has left the catalog still has no warning. `summarizeOrder` throws on an unknown sku, and `POST /api/orders` checks every sku is real before calling it, so a placed order is always clean. But a stored invoice from before a product was pulled would break `visibleInvoice`. Not a live scenario yet.
+
+## September 4, 2026 - Cleanup pass
+
+> A no-code review of the whole project looking for bloat: dead files, a dependency that does not fit, and files that have grown too large. Nothing below has been changed yet, these are TODOs to work through.
+
+- [ ] **TODO**: `styled-components` is a dependency used for exactly one thing, the dot spinner in `components/Loader.tsx`. Every other pixel in the app is Tailwind. Rewrite the spinner in Tailwind or plain CSS and drop the dependency.
+- [ ] **TODO**: Delete confirmed dead files, zero importers found: `components/EmptyState.tsx`, `components/Spinner.tsx`, `components/activity-log/testData.ts`, `components/ui/select.tsx` (the app uses `native-select.tsx` instead), `components/ui/label.tsx`, and the `SelectAccount` component inside `components/account/AccountSelector.tsx` (only that file's other export, `accountList`, is actually used).
+- [ ] **TODO**: `app/claudetest/page.tsx` posts to `/api/test`, which no longer exists, so the page 404s on every submit. It is still linked in the real left nav next to Reorder and Orders. Either wire it to a real route or pull it out of the nav.
+- [ ] **TODO**: `components/draft-order/DraftOrder.tsx` is 535 lines, the largest hand-written file in the app, doing five jobs at once: re-pricing, totals math, banners, table markup, and placing the order. Split it into a pricing hook plus a few presentational pieces next time it needs a real change.
+- [ ] **TODO**: `lib/erp/` originally meant "the fake ERP system" (`mockERP.ts`, `accountRules.ts`) but now also holds `invoice.ts`, `summarizeOrder.ts`, and `priceItems.ts`, which are our own order and pricing logic, not a simulation of an external system. Worth a deliberate split if the folder keeps growing.
