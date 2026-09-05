@@ -152,6 +152,7 @@ export default function Reorder() {
                 quantity: item.quantity,
                 source: "past-order",
                 sourceRef: invoiceId,
+                sourceDate: data.invoice?.timestamp,
               }),
             ),
           );
