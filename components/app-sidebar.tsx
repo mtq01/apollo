@@ -19,6 +19,7 @@ import {
   PackageIcon,
   FlaskConicalIcon,
   CommandIcon,
+  Rocket
 } from "lucide-react"
 
 const data = {
@@ -51,7 +52,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               className="data-[slot=sidebar-menu-button]:p-1.5!"
               render={<Link href="/" />}
             >
-              <CommandIcon className="size-5!" />
+              <Rocket className="size-5!" />
               <span className="text-base font-semibold">Apollo</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
