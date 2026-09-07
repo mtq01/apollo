@@ -21,6 +21,7 @@ export type DraftLine = {
   source: DraftLineSource;
   // The PO or order it came from ("inv-1001", "order-3"), shown under the sku.
   sourceRef?: string;
+  sourceDate?: string;
 };
 
 type DraftOrderContextValue = {

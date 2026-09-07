@@ -59,6 +59,16 @@ function formatStockCheckTime(isoTimestamp: string) {
   });
 }
 
+function formatSourceDate(isoTimestamp: string) {
+  return new Date(isoTimestamp).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 export function DraftOrder({
   forceFailure,
   isLoading,
@@ -383,9 +393,17 @@ export function DraftOrder({
                     {line.sku}
                   </div>
                   {line.sourceRef ? (
-                    <div className="text-xs font-medium text-green-700">
-                      from {line.sourceRef}
-                    </div>
+                    <>
+                      <div className="text-xs font-medium text-green-700">
+                        from {line.sourceRef}
+                      </div>
+
+                      {line.sourceDate && (
+                        <div className="text-xs text-gray-500">
+                          {formatSourceDate(line.sourceDate)}
+                        </div>
+                      )}
+                    </>
                   ) : line.source === "suggestion" ? (
                     <div className="text-xs font-medium text-green-700">
                       suggested
