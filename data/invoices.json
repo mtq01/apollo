@@ -150,5 +150,69 @@
       "internalCost"
     ],
     "timestamp": "2026-08-15T16:10:00Z"
+  },
+  {
+    "id": "inv-1006",
+    "accountId": 2,
+    "items": [
+      {
+        "sku": "AUD-6203",
+        "quantity": 2,
+        "productName": "Noise Cancelling Headphones",
+        "listPrice": 179.99,
+        "price": 161.99,
+        "internalCost": 107.99
+      }
+    ],
+    "subtotal": 359.98,
+    "discount": 36,
+    "tax": 22.68,
+    "totalAmount": 346.66,
+    "internalCost": 215.98,
+    "restrictedFields": [
+      "discount",
+      "internalCost"
+    ],
+    "timestamp": "2026-09-04T20:51:00.284Z"
+  },
+  {
+    "id": "inv-1007",
+    "accountId": 2,
+    "items": [
+      {
+        "sku": "ACC-1856",
+        "quantity": 2,
+        "productName": "Laptop Stand",
+        "listPrice": 49.99,
+        "price": 44.99,
+        "internalCost": 29.99
+      },
+      {
+        "sku": "PER-5017",
+        "quantity": 2,
+        "productName": "Mechanical Keyboard",
+        "listPrice": 89.99,
+        "price": 80.99,
+        "internalCost": 53.99
+      },
+      {
+        "sku": "ACC-3391",
+        "quantity": 1,
+        "productName": "USB-C Hub",
+        "listPrice": 39.99,
+        "price": 35.99,
+        "internalCost": 23.99
+      }
+    ],
+    "subtotal": 319.95,
+    "discount": 32,
+    "tax": 20.16,
+    "totalAmount": 308.11,
+    "internalCost": 191.95,
+    "restrictedFields": [
+      "discount",
+      "internalCost"
+    ],
+    "timestamp": "2026-09-04T23:23:16.246Z"
   }
 ]
