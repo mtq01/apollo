@@ -109,7 +109,7 @@ export default function OrdersPage() {
   }
 
   return (
-    <div className="flex w-full min-w-0 flex-col items-start px-16 py-16 text-left">
+    <div className="flex w-full min-w-0 flex-col items-start px-4 py-4 text-left">
       <h1 className="mb-8 max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black">
         Order History
       </h1>
