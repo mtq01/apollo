@@ -17,8 +17,6 @@ import {
 import {
   ShoppingCartIcon,
   PackageIcon,
-  FlaskConicalIcon,
-  CommandIcon,
   Rocket
 } from "lucide-react"
 
@@ -33,11 +31,6 @@ const data = {
       title: "Orders",
       url: "/orders",
       icon: <PackageIcon />,
-    },
-    {
-      title: "Claude Test",
-      url: "/claudetest",
-      icon: <FlaskConicalIcon />,
     },
   ],
 }

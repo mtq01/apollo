@@ -1,6 +1,6 @@
 // import ErrorType object (ErrorType is a Discriminated Union)
 import { ErrorType } from "../types";
-import { CircleAlert } from "@/components/icons";
+import { CircleAlert } from "lucide-react";
 import { buyerErrorMessage } from "@/lib/erp/errorMessages";
 
 /* 
