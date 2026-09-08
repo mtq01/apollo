@@ -7,7 +7,7 @@
 import { createContext } from "react";
 
 // Where a line came from. Drives the green tag in the cart.
-export type DraftLineSource =
+type DraftLineSource =
   | "past-order"
   | "paste"
   | "manual-sku"
