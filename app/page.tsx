@@ -243,7 +243,7 @@ export default function Reorder() {
   };
 
   return (
-    <div className="flex flex-col w-full min-w-0 items-start text-left px-16 py-16">
+    <div className="flex flex-col w-full min-w-0 items-start text-left px-4 py-16">
       <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black mb-8">
         Reorder
       </h1>
