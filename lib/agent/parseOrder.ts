@@ -67,6 +67,16 @@ export async function parseOrder(text: string, account: UserContext): Promise<Pa
       // We already know the account, so our code uses account.id.
       const history = await getAccountInvoices(account.id);
 
+      if (history.length === 0) {
+        // Nothing to pick from. Stop here instead of handing Claude an empty
+        // list and letting it invent an invoice id to call get_invoice with.
+        return {
+          type: "products",
+          products: [],
+          summary: { totalItems: 0, needsReview: 0 },
+        };
+      }
+
       // Give Claude both:
       // 1. Its own tool request
       // 2. The result from our real invoice lookup
@@ -86,9 +96,8 @@ export async function parseOrder(text: string, account: UserContext): Promise<Pa
         ],
       });
 
-      // Claude has not finished yet.
-      // It needs to see the history and decide what products
-      // should be reordered.
+      // Claude has not finished yet. It needs to see the history, pick the
+      // one order the buyer means, and call get_invoice with that order's id.
       continue;
     }
 
