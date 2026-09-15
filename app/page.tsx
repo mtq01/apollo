@@ -8,6 +8,7 @@
 
 import { useContext, useState } from "react";
 import { toast } from "sonner";
+import { CircleX } from "lucide-react";
 import ErrorMessage from "@/components/ErrorMessage";
 import { buyerErrorMessage } from "@/lib/erp/errorMessages";
 import { ErrorType, ActivityEvent, ForcedFailure, Product } from "@/types";
@@ -117,8 +118,7 @@ const QUICK_ACTIONS: {
     forceFailure: "timeout",
   },
   {
-    // Plain product names, no SKUs, so this goes through Claude instead of
-    // the SKU fast path (see parseSkuList) — shows the free-text paste flow.
+    // Plain product names, no SKUs, so this goes through Claude instead of the SKU fast path (see parseSkuList). shows the free-text paste flow.
     label: "Paste a product list",
     text: () =>
       "2 wireless mice, a mechanical keyboard, and a usb-c hub",
@@ -372,50 +372,75 @@ export default function Reorder() {
           "did you mean" products the buyer can add instead. */}
       {unmatched.length > 0 && (
         <div className="mb-8 w-full max-w-2xl">
-          <h3 className="mb-2 text-sm font-medium text-gray-700">
-            Couldn't add these
-          </h3>
+          <div className="mb-2 flex items-center justify-between">
+            <h3 className="text-sm font-medium text-gray-700">
+              Couldn't add these
+            </h3>
+            <button
+              onClick={() => setUnmatched([])}
+              className="text-sm text-apollo-dark hover:text-red-500 underline cursor-pointer hover:no-underline"
+            >
+              Clear
+            </button>
+          </div>
           <ul className="flex flex-col gap-3">
             {unmatched.map((row, index) => (
-              <li key={index} className="rounded-lg border border-gray-200 p-3">
-                <p className="text-sm font-medium">
-                  {row.rawText ?? row.name ?? "Unknown item"}
-                </p>
-                <p className="text-sm text-gray-600">
-                  {row.matchError
-                    ? row.matchError.message
-                    : row.stockError
-                      ? buyerErrorMessage(row.stockError)
-                      : "No match in the catalog."}
-                </p>
-                {row.suggestions && row.suggestions.length > 0 && (
-                  <ul className="mt-2 flex flex-col gap-1">
-                    {row.suggestions.map((suggestion) => (
-                      <li key={suggestion.product.sku}>
-                        <button
-                          onClick={() => {
-                            addLines([
-                              {
-                                sku: suggestion.product.sku,
-                                productName: suggestion.product.name,
-                                quantity: row.quantity ?? 1,
-                                source: "suggestion",
-                              },
-                            ]);
-                            // this row is handled now, so drop it from the list
-                            setUnmatched((current) =>
-                              current.filter((other) => other !== row),
-                            );
-                          }}
-                          className="text-left text-sm underline hover:no-underline"
-                        >
-                          Add {suggestion.product.name} (
-                          {suggestion.product.sku})
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+              <li
+                key={index}
+                className="flex items-start justify-between gap-2 rounded-lg border border-gray-200 p-3"
+              >
+                <div>
+                  <p className="text-sm font-medium">
+                    {row.rawText ?? row.name ?? "Unknown item"}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    {row.matchError
+                      ? row.matchError.message
+                      : row.stockError
+                        ? buyerErrorMessage(row.stockError)
+                        : "No match in the catalog."}
+                  </p>
+                  {row.suggestions && row.suggestions.length > 0 && (
+                    <ul className="mt-2 flex flex-col gap-1">
+                      {row.suggestions.map((suggestion) => (
+                        <li key={suggestion.product.sku}>
+                          <button
+                            onClick={() => {
+                              addLines([
+                                {
+                                  sku: suggestion.product.sku,
+                                  productName: suggestion.product.name,
+                                  quantity: row.quantity ?? 1,
+                                  source: "suggestion",
+                                },
+                              ]);
+                              // this row is handled now, so drop it from the list
+                              setUnmatched((current) =>
+                                current.filter((other) => other !== row),
+                              );
+                            }}
+                            className="text-left text-sm underline hover:no-underline"
+                          >
+                            Add {suggestion.product.name} (
+                            {suggestion.product.sku})
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                {/* dismiss this one row, same icon and behavior as removing a cart line */}
+                <button
+                  onClick={() =>
+                    setUnmatched((current) =>
+                      current.filter((other) => other !== row),
+                    )
+                  }
+                  aria-label={`Dismiss ${row.rawText ?? row.name ?? "item"}`}
+                  className="px-1 align-middle text-gray-500 hover:text-red-600"
+                >
+                  <CircleX size={16} className="cursor-pointer" />
+                </button>
               </li>
             ))}
           </ul>
