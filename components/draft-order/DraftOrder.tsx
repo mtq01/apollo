@@ -91,10 +91,13 @@ function isStale(pricedRow: PricedRow | undefined): boolean {
 
 export function DraftOrder({
   forceFailure,
+  setForceFailure,
   isLoading,
 }: {
   // From the demo dropdown; makes the re-price fail on purpose.
   forceFailure?: ForcedFailure | null;
+  // clears the dropdown after one use, so it only affects the batch that asked for it.
+  setForceFailure?: (value: ForcedFailure | null) => void;
   isLoading?: boolean;
 }) {
   // The active account. Prices depend on it; actions are blocked until one is picked.
@@ -108,6 +111,22 @@ export function DraftOrder({
 
   // Latest prices from the server, keyed by sku.
   const [pricedBySku, setPricedBySku] = useState<Record<string, PricedRow>>({});
+
+  // same data as pricedBySku, kept in a ref too. refreshPrices reads this
+  // instead of the state, so it does not need pricedBySku as a dependency
+  // and does not re-trigger itself every time it saves a new price.
+  const pricedBySkuRef = useRef(pricedBySku);
+  const updatePricedBySku = useCallback(
+    (next: Record<string, PricedRow>) => {
+      pricedBySkuRef.current = next;
+      setPricedBySku(next);
+    },
+    [],
+  );
+
+  // which account the cached prices belong to. switching accounts means
+  // prices and stock could be different for everyone, so check everyone again.
+  const lastPricedAccountId = useRef(accountId);
 
   // True while a price request is running.
   const [isPricing, setIsPricing] = useState(false);
@@ -124,15 +143,42 @@ export function DraftOrder({
   // AbortController for the in-flight price request, so a stale response can't overwrite newer prices.
   const priceRequestRef = useRef<AbortController | null>(null);
 
-  // Re-price every line. In useCallback so the timer effect only restarts when its inputs change. 
+  // Re-price the cart. In useCallback so the timer effect only restarts when its inputs change.
   const refreshPrices = useCallback(async () => {
     // Drop any earlier request so a slow one can't land after a newer one.
     priceRequestRef.current?.abort();
 
     // Nothing to price without an account or items.
     if (!accountId || lines.length === 0) {
-      setPricedBySku({});
+      updatePricedBySku({});
       setErrorMessage(null);
+      return;
+    }
+
+    // an account switch means every line needs a fresh check. otherwise only
+    // check lines with no cached price, a past failure, or stale stock.
+    // a line that already priced fine keeps its cached result.
+    const needsFullRefresh = lastPricedAccountId.current !== accountId;
+    lastPricedAccountId.current = accountId;
+
+    const linesToCheck = needsFullRefresh
+      ? lines
+      : lines.filter((line) => {
+          const cached = pricedBySkuRef.current[line.sku];
+          return !cached || cached.stockError || isStale(cached);
+        });
+
+    // carry over anything not being rechecked, drop lines removed from the cart
+    const carriedOver: Record<string, PricedRow> = {};
+    for (const line of lines) {
+      const cached = pricedBySkuRef.current[line.sku];
+      const isBeingChecked = linesToCheck.some((l) => l.sku === line.sku);
+      if (cached && !isBeingChecked) carriedOver[line.sku] = cached;
+    }
+
+    // nothing new to check, just apply the removals and stop.
+    if (linesToCheck.length === 0) {
+      updatePricedBySku(carriedOver);
       return;
     }
 
@@ -143,13 +189,13 @@ export function DraftOrder({
     setErrorMessage(null);
 
     try {
-      // Price every line. forceFailure is only set from the demo dropdown.
+      // Price only the lines that need it. forceFailure is only set from the demo dropdown.
       const response = await fetch("/api/quote/items", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           accountId,
-          items: lines.map((line) => ({
+          items: linesToCheck.map((line) => ({
             sku: line.sku,
             quantity: line.quantity,
           })),
@@ -157,6 +203,10 @@ export function DraftOrder({
         }),
         signal: abortController.signal,
       });
+
+      // a forced failure only applies to this one batch.
+      if (forceFailure) setForceFailure?.(null);
+
       const data = await response.json();
 
       if (!response.ok) {
@@ -167,8 +217,8 @@ export function DraftOrder({
         return;
       }
 
-      // Index the priced rows by sku.
-      const nextPricedBySku: Record<string, PricedRow> = {};
+      // Start from what we carried over, then add the fresh results.
+      const nextPricedBySku: Record<string, PricedRow> = { ...carriedOver };
       for (const quoteRow of (data.quotes ?? []) as PricedRow[]) {
         if (quoteRow.sku) nextPricedBySku[quoteRow.sku] = quoteRow;
       }
@@ -203,7 +253,7 @@ export function DraftOrder({
         );
       }
 
-      setPricedBySku(nextPricedBySku);
+      updatePricedBySku(nextPricedBySku);
     } catch {
       // Aborts land here too; only a real failure gets a message.
       if (!abortController.signal.aborted) {
@@ -213,7 +263,7 @@ export function DraftOrder({
     } finally {
       if (!abortController.signal.aborted) setIsPricing(false);
     }
-  }, [accountId, lines, forceFailure, logEvent]);
+  }, [accountId, lines, forceFailure, logEvent, updatePricedBySku, setForceFailure]);
 
   // Debounce: every change clears the old timer and starts a new one, so only a pause triggers the re-price.
   useEffect(() => {

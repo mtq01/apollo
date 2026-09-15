@@ -423,7 +423,11 @@ export default function Reorder() {
       )}
 
       {/* DraftOrder Table Output: */}
-      <DraftOrder forceFailure={forceFailure} isLoading={isLoading} />
+      <DraftOrder
+        forceFailure={forceFailure}
+        setForceFailure={setForceFailure}
+        isLoading={isLoading}
+      />
     </div>
   );
 }
