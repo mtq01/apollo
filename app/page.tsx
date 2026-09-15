@@ -171,8 +171,7 @@ export default function Reorder() {
         return;
       }
 
-      // A PO / invoice lookup: put its line items straight into the cart, just
-      // like reordering a past order. No card.
+      // A PO / invoice lookup: put its line items straight into the cart, just like reordering a past order. No card.
       if (data?.type === "invoice") {
         const invoiceId: string = data.invoice?.id ?? "that PO";
         const invoiceItems = data.invoice?.items ?? [];
@@ -202,8 +201,7 @@ export default function Reorder() {
         return;
       }
 
-      // A normal quote. Priced matches go into the cart; anything else is
-      // listed below so the buyer can pick a suggestion.
+      // A normal quote. Priced matches go into the cart; anything else is listed below so the buyer can pick a suggestion.
       const rows: QuoteRow[] = data?.quotes ?? [];
       const matched = rows.filter(
         (row) =>
