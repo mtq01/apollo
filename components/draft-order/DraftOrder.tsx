@@ -91,13 +91,13 @@ function isStale(pricedRow: PricedRow | undefined): boolean {
 
 export function DraftOrder({
   forceFailure,
-  setForceFailure,
+  setForceFailureAction,
   isLoading,
 }: {
   // From the demo dropdown; makes the re-price fail on purpose.
   forceFailure?: ForcedFailure | null;
-  // clears the dropdown after one use, so it only affects the batch that asked for it.
-  setForceFailure?: (value: ForcedFailure | null) => void;
+  // clears the dropdown after one use, so it only affects the batch that asked for it. named ...Action so next treats this function prop as safe at the "use client" boundary.
+  setForceFailureAction?: (value: ForcedFailure | null) => void;
   isLoading?: boolean;
 }) {
   // The active account. Prices depend on it; actions are blocked until one is picked.
@@ -112,9 +112,7 @@ export function DraftOrder({
   // Latest prices from the server, keyed by sku.
   const [pricedBySku, setPricedBySku] = useState<Record<string, PricedRow>>({});
 
-  // same data as pricedBySku, kept in a ref too. refreshPrices reads this
-  // instead of the state, so it does not need pricedBySku as a dependency
-  // and does not re-trigger itself every time it saves a new price.
+  // same data as pricedBySku, kept in a ref too. refreshPrices reads this instead of the state, so it does not need pricedBySku as a dependency and does not re-trigger itself every time it saves a new price.
   const pricedBySkuRef = useRef(pricedBySku);
   const updatePricedBySku = useCallback(
     (next: Record<string, PricedRow>) => {
@@ -124,13 +122,10 @@ export function DraftOrder({
     [],
   );
 
-  // which account the cached prices belong to. switching accounts means
-  // prices and stock could be different for everyone, so check everyone again.
+  // which account the cached prices belong to. switching accounts means prices and stock could be different for everyone, so check everyone again.
   const lastPricedAccountId = useRef(accountId);
 
-  // always has the latest forceFailure, read inside refreshPrices. resetting
-  // forceFailure should not by itself start a new price check, so it stays
-  // out of refreshPrices' own dependency list.
+  // always has the latest forceFailure, read inside refreshPrices. resetting forceFailure should not by itself start a new price check, so it stays out of refreshPrices' own dependency list.
   const forceFailureRef = useRef(forceFailure);
   useEffect(() => {
     forceFailureRef.current = forceFailure;
@@ -163,9 +158,7 @@ export function DraftOrder({
       return;
     }
 
-    // an account switch means every line needs a fresh check. otherwise only
-    // check lines with no cached price, a past failure, or stale stock.
-    // a line that already priced fine keeps its cached result.
+    // an account switch means every line needs a fresh check. otherwise only check lines with no cached price, a past failure, or stale stock. a line that already priced fine keeps its cached result.
     const needsFullRefresh = lastPricedAccountId.current !== accountId;
     lastPricedAccountId.current = accountId;
 
@@ -213,10 +206,8 @@ export function DraftOrder({
         signal: abortController.signal,
       });
 
-      // a forced failure only applies to this one batch. resetting it here
-      // does not start another price check, since refreshPrices reads
-      // forceFailure from a ref instead of depending on it directly.
-      if (forceFailureForThisBatch) setForceFailure?.(null);
+      // a forced failure only applies to this one batch. resetting it here does not start another price check, since refreshPrices reads forceFailure from a ref instead of depending on it directly.
+      if (forceFailureForThisBatch) setForceFailureAction?.(null);
 
       const data = await response.json();
 
@@ -234,8 +225,7 @@ export function DraftOrder({
         if (quoteRow.sku) nextPricedBySku[quoteRow.sku] = quoteRow;
       }
 
-      // one log line per reason a stock check failed, not one line per item,
-      // and not one line for every reason mixed together either.
+      // one log line per reason a stock check failed, not one line per item, and not one line for every reason mixed together either.
       const failedByReason = new Map<string, string[]>();
       for (const quoteRow of Object.values(nextPricedBySku)) {
         if (!quoteRow.stockError) continue;
@@ -274,7 +264,7 @@ export function DraftOrder({
     } finally {
       if (!abortController.signal.aborted) setIsPricing(false);
     }
-  }, [accountId, lines, logEvent, updatePricedBySku, setForceFailure]);
+  }, [accountId, lines, logEvent, updatePricedBySku, setForceFailureAction]);
 
   // Debounce: every change clears the old timer and starts a new one, so only a pause triggers the re-price.
   useEffect(() => {
@@ -284,8 +274,7 @@ export function DraftOrder({
 
   // Place the order via POST /api/orders, then remember the id and empty the cart.
   async function placeOrder() {
-    // never place an order with a line whose stock could not be confirmed.
-    // the button is disabled for this too, this is a second check just in case.
+    // never place an order with a line whose stock could not be confirmed. the button is disabled for this too, this is a second check just in case.
     if (!accountId || lines.length === 0 || failedLines.length > 0) return;
     setIsPlacingOrder(true);
     setErrorMessage(null);
