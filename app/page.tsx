@@ -425,7 +425,7 @@ export default function Reorder() {
       {/* DraftOrder Table Output: */}
       <DraftOrder
         forceFailure={forceFailure}
-        setForceFailure={setForceFailure}
+        setForceFailureAction={setForceFailure}
         isLoading={isLoading}
       />
     </div>
