@@ -47,8 +47,7 @@ type PricedRow = {
   stockLastUpdated?: string | "hidden" | "error"; // when the ERP last refreshed this number
 };
 
-// Wait this long after the last change before re-pricing, so we don't fire a
-// request on every keystroke.
+// Wait this long after the last change before re-pricing, so we don't fire a request on every keystroke.
 const PRICE_REFRESH_DELAY_MS = 500;
 
 // A server timestamp as a short time like "2:45 PM".
@@ -98,14 +97,13 @@ export function DraftOrder({
   // True while "Place order" is running.
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
 
-  // The new order id after a successful "Place order"; shown as a confirmation.
+  // The new order id after a successful "Place order". shown as a confirmation.
   const [placedOrderId, setPlacedOrderId] = useState<string | null>(null);
 
   // AbortController for the in-flight price request, so a stale response can't overwrite newer prices.
   const priceRequestRef = useRef<AbortController | null>(null);
 
-  /* Re-price every line. In useCallback so the timer effect only restarts when
-     its inputs change. */
+  // Re-price every line. In useCallback so the timer effect only restarts when its inputs change. 
   const refreshPrices = useCallback(async () => {
     // Drop any earlier request so a slow one can't land after a newer one.
     priceRequestRef.current?.abort();
@@ -141,7 +139,10 @@ export function DraftOrder({
       const data = await response.json();
 
       if (!response.ok) {
-        setErrorMessage(data?.error?.message ?? "Couldn't price this order.");
+        // Show this failure in the cart and in the log.
+        const message = data?.error?.message ?? "Couldn't price this order.";
+        setErrorMessage(message);
+        logEvent(message, "error");
         return;
       }
 
@@ -150,16 +151,28 @@ export function DraftOrder({
       for (const quoteRow of (data.quotes ?? []) as PricedRow[]) {
         if (quoteRow.sku) nextPricedBySku[quoteRow.sku] = quoteRow;
       }
+
+      // Log each stock check that failed, so the reason shows up in the log too.
+      for (const quoteRow of Object.values(nextPricedBySku)) {
+        if (quoteRow.stockError) {
+          logEvent(
+            `Stock check failed for ${quoteRow.name}: ${buyerErrorMessage(quoteRow.stockError)}`,
+            "stock",
+          );
+        }
+      }
+
       setPricedBySku(nextPricedBySku);
     } catch {
       // Aborts land here too; only a real failure gets a message.
       if (!abortController.signal.aborted) {
         setErrorMessage("Couldn't reach the server.");
+        logEvent("Could not reach the server", "error");
       }
     } finally {
       if (!abortController.signal.aborted) setIsPricing(false);
     }
-  }, [accountId, lines, forceFailure]);
+  }, [accountId, lines, forceFailure, logEvent]);
 
   // Debounce: every change clears the old timer and starts a new one, so only a pause triggers the re-price.
   useEffect(() => {
