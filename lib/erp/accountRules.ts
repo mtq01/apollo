@@ -78,3 +78,32 @@ export function accessWarehouse({
       return false;
   }
 }
+
+// Same shape as CONTRACT_DISCOUNT above: named constants instead of bare
+// numbers in the maths below.
+const CROSS_WAREHOUSE_DELAY = 2; // extra days when the product ships from a warehouse other than the account's own
+const CONTRACT_PRIORITY_DAYS = 1; // contract accounts get priority handling, shaving a day off
+
+// Lead time depends on the account too, same as price. Reuses the same
+// warehouse match that seeStock/accessWarehouse use to decide visibility.
+export function calculateLeadTime({
+  account,
+  product,
+}: AccountProductParams): number {
+  let leadTime = product.leadTime;
+
+  // Doesn't ship from the account's own warehouse, so it has to transfer
+  // first. Not a distance/routing calculation, same flat equality check used
+  // everywhere else in this file.
+  if (account.assignedWarehouse !== product.warehouse) {
+    leadTime += CROSS_WAREHOUSE_DELAY;
+  }
+
+  // Contract accounts get priority fulfillment. Floored at 1, a "0 day" or
+  // negative lead time isn't a real answer.
+  if (account.accountType === "contract") {
+    leadTime = Math.max(1, leadTime - CONTRACT_PRIORITY_DAYS);
+  }
+
+  return leadTime;
+}
