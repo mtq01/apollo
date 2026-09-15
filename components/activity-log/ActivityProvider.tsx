@@ -3,13 +3,15 @@
 /* Holds the activity log state: the events, and whether the panel is open.
    Wrap the app in this so the header, the sidebar, and the pages share it. */
 
-import { useCallback, useState } from "react";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
 
 import { ActivityEvent, ActivityCategory } from "@/types";
 import { useIsBelowLg } from "@/hooks/use-mobile";
+import { AccountContext } from "@/components/account/AccountContext";
 import { ActivityContext } from "./ActivityContext";
 
 export function ActivityProvider({ children }: { children: React.ReactNode }) {
+  const { accountId } = useContext(AccountContext);
   const [events, setEvents] = useState<ActivityEvent[]>([]);
   const [open, setOpen] = useState(true); // docked panel, wide screens
   const [openMobile, setOpenMobile] = useState(false); // slide-in sheet, narrow screens
@@ -41,6 +43,18 @@ export function ActivityProvider({ children }: { children: React.ReactNode }) {
 
   // Empty the log.
   const clearLog = useCallback(() => setEvents([]), []);
+
+  /* Switching accounts empties the activity log. */
+  const previousAccountId = useRef(accountId);
+  useEffect(() => {
+    if (
+      previousAccountId.current !== null &&
+      previousAccountId.current !== accountId
+    ) {
+      clearLog();
+    }
+    previousAccountId.current = accountId;
+  }, [accountId, clearLog]);
 
   return (
     <ActivityContext.Provider
