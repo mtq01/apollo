@@ -4,10 +4,10 @@
    this so any page can read and update the same cart. Also writes a line to
    the activity log for each add and remove. */
 
-import { useCallback, useContext, useEffect, useRef, useState } from "react";
+import { useCallback, useContext, useState } from "react";
 
-import { AccountContext } from "@/components/account/AccountContext";
 import { ActivityContext } from "@/components/activity-log/ActivityContext";
+import { useResetOnAccountSwitch } from "@/hooks/use-reset-on-account-switch";
 import { DraftLine, DraftOrderContext } from "./DraftOrderContext";
 
 // "1 item" or "3 items"
@@ -17,7 +17,6 @@ function itemCount(count: number) {
 
 export function DraftOrderProvider({ children }: { children: React.ReactNode }) {
   const { logEvent } = useContext(ActivityContext);
-  const { accountId } = useContext(AccountContext);
   const [lines, setLines] = useState<DraftLine[]>([]);
 
   // Add lines. If a sku is already in the cart, add the new quantity onto the
@@ -89,16 +88,9 @@ export function DraftOrderProvider({ children }: { children: React.ReactNode }) 
   // so the log line for it lives in the caller, not here.
   const clear = useCallback(() => setLines([]), []);
 
-  // Switching accounts empties the cart. A cart belongs to one account, so the
-  // lines from the old account should not carry over. Skips the first render,
-  // where accountId goes from null to the initial pick.
-  const previousAccountId = useRef(accountId);
-  useEffect(() => {
-    if (previousAccountId.current !== accountId) {
-      previousAccountId.current = accountId;
-      clear();
-    }
-  }, [accountId, clear]);
+  // A cart belongs to one account, so the lines from the old account should
+  // not carry over.
+  useResetOnAccountSwitch(clear);
 
   return (
     <DraftOrderContext.Provider
