@@ -21,8 +21,9 @@ import { buyerErrorMessage } from "@/lib/erp/errorMessages";
 
 // destructures 'error' out of the props object & tells TypeScript that the props object 'error' field must be typed as ErrorType
 function DisplayError({ error }: { error: ErrorType }) {
-  
-const message = buyerErrorMessage(error);
+  // use the server's own message, it is already specific to what happened.
+  // only fall back to the generic text if one somehow was not set.
+  const message = error.message || buyerErrorMessage(error);
 
   return (
     <div
