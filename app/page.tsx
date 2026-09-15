@@ -6,13 +6,14 @@
   Rows we can't add are listed at the bottom with "did you mean" suggestions. */
 "use client";
 
-import { useContext, useEffect, useRef, useState } from "react";
+import { useContext, useState } from "react";
 import { toast } from "sonner";
 import ErrorMessage from "@/components/ErrorMessage";
 import { buyerErrorMessage } from "@/lib/erp/errorMessages";
 import { ErrorType, ActivityEvent, ForcedFailure, Product } from "@/types";
 import { AccountContext } from "@/components/account/AccountContext";
 import { ActivityContext } from "@/components/activity-log/ActivityContext";
+import { useResetOnAccountSwitch } from "@/hooks/use-reset-on-account-switch";
 import {
   DraftOrderContext,
   type DraftLine,
@@ -287,16 +288,7 @@ export default function Reorder() {
   };
 
   // Switching accounts clears the text box
-  const previousAccountId = useRef(accountId);
-  useEffect(() => {
-    if (
-      previousAccountId.current !== null &&
-      previousAccountId.current !== accountId
-    ) {
-      setText("");
-    }
-    previousAccountId.current = accountId;
-  }, [accountId]);
+  useResetOnAccountSwitch(() => setText(""));
 
   return (
     <div className="flex flex-col w-full min-w-0 items-start text-left px-4 py-16">
