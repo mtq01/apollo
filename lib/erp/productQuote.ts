@@ -1,5 +1,10 @@
 import type { AccountProductParams, ActivityEvent, ForcedFailure, ErrorType, ActivityCategory, LineItemResult, QuoteResult} from "../../types";
-import { calculatePrice, seeStock, accessWarehouse } from "./accountRules";
+import {
+  calculatePrice,
+  calculateLeadTime,
+  seeStock,
+  accessWarehouse,
+} from "./accountRules";
 import { getERPStock } from "./mockERP";
 import { randomUUID } from "crypto";
 
@@ -36,6 +41,11 @@ export async function getQuoteForProduct({ account, product}: AccountProductPara
   // +++++ First call to 'addEvent': After calculatePrice runs, LOG the PRICE. +++++
   const price = calculatePrice({ account, product });
   addEvent(`Price Calculated: $${price} — ${product.name}`, "price");
+
+  // Lead time depends on the account too (cross-warehouse delay, contract
+  // priority), same as price. Log it the same way.
+  const leadTime = calculateLeadTime({ account, product });
+  addEvent(`Lead Time Calculated: ${leadTime} day(s) — ${product.name}`, "price");
 
 
   const canSeeStock = seeStock({ account, product });               // is this role allowed to see stock?
@@ -101,7 +111,7 @@ export async function getQuoteForProduct({ account, product}: AccountProductPara
     stock,
     stockLastUpdated,
     stockError,
-    leadTime: product.leadTime,
+    leadTime,
     warehouse: canSeeWarehouse ? product.warehouse : "hidden",      // only include warehouse if allowed
     events,                                                         // full log of everything that happened above
     calculatedAt,

@@ -6,7 +6,7 @@
   Rows we can't add are listed at the bottom with "did you mean" suggestions. */
 "use client";
 
-import { useContext, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import ErrorMessage from "@/components/ErrorMessage";
 import { buyerErrorMessage } from "@/lib/erp/errorMessages";
@@ -87,6 +87,43 @@ function itemCountLabel(count: number) {
   return `${count} items`;
 }
 
+/* One invoice per demo account, so the "Look up a PO number" quick action always points at something
+the picked account is actually allowed to see. Tied to the seed data in data/invoices.json. update this if that changes. */
+const EXAMPLE_INVOICE_BY_ACCOUNT: Record<number, string> = {
+  1: "inv-1001",
+  2: "inv-1002",
+  3: "inv-1003",
+};
+
+/* Prefills the text box so a first-time buyer can see what the box is for  without guessing. 
+Clicking one fills the textarea, same as if the buyer  had typed it, they still have to press "Add Products" to run it. */
+const QUICK_ACTIONS: {
+  label: string;
+  text: (accountId: number) => string;
+  forceFailure?: ForcedFailure;
+}[] = [
+  {
+    label: "Previous Invoice",
+    text: () => "I want what I ordered on my last invoice",
+  },
+  {
+    label: "Look up a PO number",
+    text: (accountId) => EXAMPLE_INVOICE_BY_ACCOUNT[accountId] ?? "inv-1001",
+  },
+  {
+    label: "Simulate a stock delay",
+    text: () => "PER-2284",
+    forceFailure: "timeout",
+  },
+  {
+    // Plain product names, no SKUs, so this goes through Claude instead of
+    // the SKU fast path (see parseSkuList) — shows the free-text paste flow.
+    label: "Paste a product list",
+    text: () =>
+      "2 wireless mice, a mechanical keyboard, and a usb-c hub",
+  },
+];
+
 export default function Reorder() {
   const { accountId } = useContext(AccountContext);
   const { addLines } = useContext(DraftOrderContext);
@@ -134,8 +171,7 @@ export default function Reorder() {
         return;
       }
 
-      // A PO / invoice lookup: put its line items straight into the cart, just
-      // like reordering a past order. No card.
+      // A PO / invoice lookup: put its line items straight into the cart, just like reordering a past order. No card.
       if (data?.type === "invoice") {
         const invoiceId: string = data.invoice?.id ?? "that PO";
         const invoiceItems = data.invoice?.items ?? [];
@@ -165,8 +201,7 @@ export default function Reorder() {
         return;
       }
 
-      // A normal quote. Priced matches go into the cart; anything else is
-      // listed below so the buyer can pick a suggestion.
+      // A normal quote. Priced matches go into the cart; anything else is listed below so the buyer can pick a suggestion.
       const rows: QuoteRow[] = data?.quotes ?? [];
       const matched = rows.filter(
         (row) =>
@@ -233,7 +268,7 @@ export default function Reorder() {
     getQuote();
   };
 
-  // Enter submits; Shift+Enter adds a newline.
+  // Enter submits, shift + enter goes to next line
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
@@ -242,11 +277,55 @@ export default function Reorder() {
     }
   };
 
+  // Quick actions require a selected account
+  const hasAccount = accountId != null;
+
+  const applyQuickAction = (action: (typeof QUICK_ACTIONS)[number]) => {
+    if (accountId == null) return;
+    setText(action.text(accountId));
+    if (action.forceFailure) setForceFailure(action.forceFailure);
+  };
+
+  // Switching accounts clears the text box
+  const previousAccountId = useRef(accountId);
+  useEffect(() => {
+    if (
+      previousAccountId.current !== null &&
+      previousAccountId.current !== accountId
+    ) {
+      setText("");
+    }
+    previousAccountId.current = accountId;
+  }, [accountId]);
+
   return (
     <div className="flex flex-col w-full min-w-0 items-start text-left px-4 py-4">
       <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black mb-8">
         Reorder
       </h1>
+
+      {/* Quick actions: fill the box, don't submit it. */}
+      <div className="mb-4 flex flex-col gap-2">
+        <div className="flex flex-wrap gap-2">
+          {QUICK_ACTIONS.map((action) => (
+            <Button
+              key={action.label}
+              type="button"
+              variant="outline"
+              disabled={!hasAccount}
+              onClick={() => applyQuickAction(action)}
+              className="disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {action.label}
+            </Button>
+          ))}
+        </div>
+        {!hasAccount && (
+          <p className="text-xs text-gray-500">
+            select an account to enable quick actions
+          </p>
+        )}
+      </div>
 
       <form
         onSubmit={handleSubmit}
@@ -259,7 +338,7 @@ export default function Reorder() {
           </span>
 
           <Textarea
-            placeholder="paste SKU's, an invoice or a list of products here"
+            placeholder="choose a quick action button above to paste SKU's, an invoice, or a list of products here."
             className="border w-full border-gray-300 p-2 min-h-37.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-grey-500"
             value={text}
             onChange={handleChange}
