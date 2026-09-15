@@ -50,6 +50,9 @@ type PricedRow = {
 // Wait this long after the last change before re-pricing, so we don't fire a request on every keystroke.
 const PRICE_REFRESH_DELAY_MS = 500;
 
+// stock numbers older than this trigger the "confirm before ordering" message
+const STALE_STOCK_AFTER_MS = 2 * 60 * 60 * 1000; // 2 hours
+
 // A server timestamp as a short time like "2:45 PM".
 function formatStockCheckTime(isoTimestamp: string) {
   return new Date(isoTimestamp).toLocaleTimeString([], {
@@ -66,6 +69,24 @@ function formatSourceDate(isoTimestamp: string) {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+// was this row's stock number already old when the quote was built?
+function isStale(pricedRow: PricedRow | undefined): boolean {
+  const checkedAt = pricedRow?.stockLastUpdated;
+  const quotedAt = pricedRow?.calculatedAt;
+  if (
+    typeof checkedAt !== "string" ||
+    checkedAt === "hidden" ||
+    checkedAt === "error" ||
+    !quotedAt
+  ) {
+    return false;
+  }
+  return (
+    new Date(quotedAt).getTime() - new Date(checkedAt).getTime() >
+    STALE_STOCK_AFTER_MS
+  );
 }
 
 export function DraftOrder({
@@ -152,14 +173,32 @@ export function DraftOrder({
         if (quoteRow.sku) nextPricedBySku[quoteRow.sku] = quoteRow;
       }
 
-      // one log line for every item that failed, not one line per item.
-      const failedNames = Object.values(nextPricedBySku)
-        .filter((quoteRow) => quoteRow.stockError)
-        .map((quoteRow) => quoteRow.name);
-      if (failedNames.length > 0) {
-        const word = failedNames.length === 1 ? "item" : "items";
+      // one log line per reason a stock check failed, not one line per item,
+      // and not one line for every reason mixed together either.
+      const failedByReason = new Map<string, string[]>();
+      for (const quoteRow of Object.values(nextPricedBySku)) {
+        if (!quoteRow.stockError) continue;
+        const reason = buyerErrorMessage(quoteRow.stockError);
+        const names = failedByReason.get(reason) ?? [];
+        names.push(quoteRow.name);
+        failedByReason.set(reason, names);
+      }
+      for (const [reason, names] of failedByReason) {
+        const word = names.length === 1 ? "item" : "items";
         logEvent(
-          `Stock check failed for ${failedNames.length} ${word}: ${failedNames.join(", ")}`,
+          `Stock check failed for ${names.length} ${word}: ${names.join(", ")}.  ${reason}`,
+          "stock",
+        );
+      }
+
+      // stale stock is not an error, the check still succeeds, so it needs its own log line instead of piggybacking on the one above.
+      const staleNames = Object.values(nextPricedBySku)
+        .filter((quoteRow) => isStale(quoteRow))
+        .map((quoteRow) => quoteRow.name);
+      if (staleNames.length > 0) {
+        const word = staleNames.length === 1 ? "item" : "items";
+        logEvent(
+          `Stock data may be a few hours old for ${staleNames.length} ${word}: ${staleNames.join(", ")}`,
           "stock",
         );
       }
@@ -274,27 +313,7 @@ export function DraftOrder({
     return pricedRow?.stock === "error" || pricedRow?.stockError != null;
   });
 
-  // stock numbers older than this trigger the "confirm before ordering" msg
-  const STALE_STOCK_AFTER_MS = 2 * 60 * 60 * 1000; // 2 hours
-
-  const hasStaleStock = lines.some((line) => {
-    const pricedRow = pricedBySku[line.sku];
-    const checkedAt = pricedRow?.stockLastUpdated;
-    const quotedAt = pricedRow?.calculatedAt;
-    if (
-      typeof checkedAt !== "string" ||
-      checkedAt === "hidden" ||
-      checkedAt === "error" ||
-      !quotedAt
-    ) {
-      return false;
-    }
-    // Was the stock number already old when the quote was built?
-    return (
-      new Date(quotedAt).getTime() - new Date(checkedAt).getTime() >
-      STALE_STOCK_AFTER_MS
-    );
-  });
+  const hasStaleStock = lines.some((line) => isStale(pricedBySku[line.sku]));
 
   // Empty cart: the "order placed" confirmation, or a hint.
   if (lines.length === 0) {
@@ -440,8 +459,10 @@ export function DraftOrder({
                     : "—"}
                 </TableCell>
 
-                {/* Stock count + check time, or "—" if hidden, or an error. */}
-                <TableCell>
+                {/* Stock count + check time, or "—" if hidden, or an error.
+                    whitespace-normal so a long error message wraps here
+                    instead of forcing the whole table wider. */}
+                <TableCell className="whitespace-normal">
                   {typeof stockLevel === "number" ? (
                     <>
                       {stockLevel}
