@@ -8,6 +8,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 
 import { AccountContext } from "@/components/account/AccountContext";
+import { ActivityContext } from "@/components/activity-log/ActivityContext";
 import { DraftOrderContext } from "@/components/draft-order/DraftOrderContext";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -57,6 +58,7 @@ function formatDate(isoTimestamp: string) {
 export default function OrdersPage() {
   const { accountId } = useContext(AccountContext);
   const { addLines } = useContext(DraftOrderContext);
+  const { logEvent } = useContext(ActivityContext);
 
   const [orders, setOrders] = useState<PastOrder[] | null>(null); // null = loading
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -73,21 +75,27 @@ export default function OrdersPage() {
         const data = await response.json();
         if (cancelled) return;
         if (data?.error) {
-          setErrorMessage(data.error.message ?? "Couldn't load your orders.");
+          // Show this failure here and in the log.
+          const message = data.error.message ?? "Couldn't load your orders.";
+          setErrorMessage(message);
+          logEvent(message, "error");
           setOrders([]);
         } else {
           setErrorMessage(null);
           setOrders(data.orders ?? []);
         }
       } catch {
-        if (!cancelled) setErrorMessage("Couldn't load your orders.");
+        if (!cancelled) {
+          setErrorMessage("Couldn't load your orders.");
+          logEvent("Couldn't load your orders.", "error");
+        }
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [accountId]);
+  }, [accountId, logEvent]);
 
   // Add the ticked lines to the cart, tagged with the order, then confirm.
   function handleAdd(

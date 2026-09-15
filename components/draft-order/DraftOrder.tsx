@@ -47,8 +47,7 @@ type PricedRow = {
   stockLastUpdated?: string | "hidden" | "error"; // when the ERP last refreshed this number
 };
 
-// Wait this long after the last change before re-pricing, so we don't fire a
-// request on every keystroke.
+// Wait this long after the last change before re-pricing, so we don't fire a request on every keystroke.
 const PRICE_REFRESH_DELAY_MS = 500;
 
 // A server timestamp as a short time like "2:45 PM".
@@ -98,14 +97,13 @@ export function DraftOrder({
   // True while "Place order" is running.
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
 
-  // The new order id after a successful "Place order"; shown as a confirmation.
+  // The new order id after a successful "Place order". shown as a confirmation.
   const [placedOrderId, setPlacedOrderId] = useState<string | null>(null);
 
   // AbortController for the in-flight price request, so a stale response can't overwrite newer prices.
   const priceRequestRef = useRef<AbortController | null>(null);
 
-  /* Re-price every line. In useCallback so the timer effect only restarts when
-     its inputs change. */
+  // Re-price every line. In useCallback so the timer effect only restarts when its inputs change. 
   const refreshPrices = useCallback(async () => {
     // Drop any earlier request so a slow one can't land after a newer one.
     priceRequestRef.current?.abort();
@@ -141,7 +139,10 @@ export function DraftOrder({
       const data = await response.json();
 
       if (!response.ok) {
-        setErrorMessage(data?.error?.message ?? "Couldn't price this order.");
+        // Show this failure in the cart and in the log.
+        const message = data?.error?.message ?? "Couldn't price this order.";
+        setErrorMessage(message);
+        logEvent(message, "error");
         return;
       }
 
@@ -150,16 +151,30 @@ export function DraftOrder({
       for (const quoteRow of (data.quotes ?? []) as PricedRow[]) {
         if (quoteRow.sku) nextPricedBySku[quoteRow.sku] = quoteRow;
       }
+
+      // one log line for every item that failed, not one line per item.
+      const failedNames = Object.values(nextPricedBySku)
+        .filter((quoteRow) => quoteRow.stockError)
+        .map((quoteRow) => quoteRow.name);
+      if (failedNames.length > 0) {
+        const word = failedNames.length === 1 ? "item" : "items";
+        logEvent(
+          `Stock check failed for ${failedNames.length} ${word}: ${failedNames.join(", ")}`,
+          "stock",
+        );
+      }
+
       setPricedBySku(nextPricedBySku);
     } catch {
       // Aborts land here too; only a real failure gets a message.
       if (!abortController.signal.aborted) {
         setErrorMessage("Couldn't reach the server.");
+        logEvent("Could not reach the server", "error");
       }
     } finally {
       if (!abortController.signal.aborted) setIsPricing(false);
     }
-  }, [accountId, lines, forceFailure]);
+  }, [accountId, lines, forceFailure, logEvent]);
 
   // Debounce: every change clears the old timer and starts a new one, so only a pause triggers the re-price.
   useEffect(() => {
@@ -281,10 +296,6 @@ export function DraftOrder({
     );
   });
 
-  const firstFailedError = failedLines[0]
-    ? pricedBySku[failedLines[0].sku]?.stockError
-    : undefined;
-
   // Empty cart: the "order placed" confirmation, or a hint.
   if (lines.length === 0) {
     return (
@@ -335,17 +346,14 @@ export function DraftOrder({
         </button>
       </div>
 
-      {/* Red banner if a stock check failed, otherwise the stale-data reminder. */}
+      {/* Red banner if a stock check failed, otherwise the stale-data reminder.
+          Kept generic, the row and the log below both have the real reason. */}
       {failedLines.length > 0 ? (
         <Alert variant="destructive" className="my-3 border-red-600 bg-red-50">
           <AlertTriangleIcon />
           <AlertDescription>
-            {failedLines[0].productName}:{" "}
-            {firstFailedError
-              ? buyerErrorMessage(firstFailedError)
-              : "Something went wrong checking stock."}
-            {failedLines.length > 1 &&
-              ` (${failedLines.length} items affected)`}
+            {failedLines.length} {failedLines.length === 1 ? "item" : "items"}{" "}
+            could not be checked. See below for details.
           </AlertDescription>
         </Alert>
       ) : hasStaleStock ? (
