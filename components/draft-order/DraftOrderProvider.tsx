@@ -4,7 +4,7 @@
    this so any page can read and update the same cart. Also writes a line to
    the activity log for each add and remove. */
 
-import { useCallback, useContext, useEffect, useRef, useState } from "react";
+import { useCallback, useContext, useState } from "react";
 
 import { AccountContext } from "@/components/account/AccountContext";
 import { ActivityContext } from "@/components/activity-log/ActivityContext";
