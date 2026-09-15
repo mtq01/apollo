@@ -61,6 +61,16 @@ The Orders page lists the account's past orders. Each one is a card. The buyer t
 
 Typing a PO number like `inv-1001` pulls that order's products straight into the cart, the same as reordering a past order.
 
+## Accounts and roles
+
+Apollo has three roles: buyer, manager, and admin.
+
+Buyer and manager are customers. Each one only ever sees their own account: their own pricing, their own stock, their own past orders.
+
+Admin is different. Admin is the supplier's own staff, not a customer. Admin sees internal cost, the one number a buyer or manager is never shown, and can browse every account's past orders, not just their own.
+
+One gap worth knowing about: Admin has no way to place an order "on behalf of" a customer yet. An order placed while acting as Admin is saved under Admin's own account, the same as a real customer buying for themselves. A believable next step would be assisted ordering, where staff place an order for a customer over the phone, but that is not built yet.
+
 ## How failures are handled
 
 Instead of one generic error, Apollo gives a specific answer for each case.
