@@ -128,6 +128,14 @@ export function DraftOrder({
   // prices and stock could be different for everyone, so check everyone again.
   const lastPricedAccountId = useRef(accountId);
 
+  // always has the latest forceFailure, read inside refreshPrices. resetting
+  // forceFailure should not by itself start a new price check, so it stays
+  // out of refreshPrices' own dependency list.
+  const forceFailureRef = useRef(forceFailure);
+  useEffect(() => {
+    forceFailureRef.current = forceFailure;
+  }, [forceFailure]);
+
   // True while a price request is running.
   const [isPricing, setIsPricing] = useState(false);
 
@@ -190,6 +198,7 @@ export function DraftOrder({
 
     try {
       // Price only the lines that need it. forceFailure is only set from the demo dropdown.
+      const forceFailureForThisBatch = forceFailureRef.current;
       const response = await fetch("/api/quote/items", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -199,13 +208,15 @@ export function DraftOrder({
             sku: line.sku,
             quantity: line.quantity,
           })),
-          forceFailure: forceFailure ?? undefined,
+          forceFailure: forceFailureForThisBatch ?? undefined,
         }),
         signal: abortController.signal,
       });
 
-      // a forced failure only applies to this one batch.
-      if (forceFailure) setForceFailure?.(null);
+      // a forced failure only applies to this one batch. resetting it here
+      // does not start another price check, since refreshPrices reads
+      // forceFailure from a ref instead of depending on it directly.
+      if (forceFailureForThisBatch) setForceFailure?.(null);
 
       const data = await response.json();
 
@@ -263,7 +274,7 @@ export function DraftOrder({
     } finally {
       if (!abortController.signal.aborted) setIsPricing(false);
     }
-  }, [accountId, lines, forceFailure, logEvent, updatePricedBySku, setForceFailure]);
+  }, [accountId, lines, logEvent, updatePricedBySku, setForceFailure]);
 
   // Debounce: every change clears the old timer and starts a new one, so only a pause triggers the re-price.
   useEffect(() => {
@@ -273,7 +284,9 @@ export function DraftOrder({
 
   // Place the order via POST /api/orders, then remember the id and empty the cart.
   async function placeOrder() {
-    if (!accountId || lines.length === 0) return;
+    // never place an order with a line whose stock could not be confirmed.
+    // the button is disabled for this too, this is a second check just in case.
+    if (!accountId || lines.length === 0 || failedLines.length > 0) return;
     setIsPlacingOrder(true);
     setErrorMessage(null);
     try {
@@ -617,11 +630,21 @@ export function DraftOrder({
         <p className="mt-2 text-sm text-red-700">{errorMessage}</p>
       )}
 
-      {/* Place order. Disabled while busy or with no account. */}
+      {/* can't place an order while a line's stock could not be confirmed. */}
+      {failedLines.length > 0 && (
+        <p className="mt-2 text-sm text-red-700">
+          Fix or remove the item(s) that could not be checked before placing
+          this order.
+        </p>
+      )}
+
+      {/* Place order. Disabled while busy, with no account, or a stock check failed. */}
       <div className="mt-4">
         <Button
           onClick={placeOrder}
-          disabled={isPlacingOrder || isPricing || !accountId}
+          disabled={
+            isPlacingOrder || isPricing || !accountId || failedLines.length > 0
+          }
           className="rounded-lg bg-black px-4 py-2 text-apollo-light hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isPlacingOrder ? "Placing…" : "Place order"}
