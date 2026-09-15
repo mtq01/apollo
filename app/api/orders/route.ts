@@ -60,8 +60,14 @@ export async function GET(request: Request) {
     );
   }
 
+  /* admin is staff, not a customer, so they can browse every account's
+     orders, not just their own. everyone else only sees their own. */
+  const invoices =
+    account.role === "admin"
+      ? await getAllInvoices()
+      : await getAccountInvoices(accountId);
+
   // Read this account's stored invoices and hide fields by role. Newest first.
-  const invoices = await getAccountInvoices(accountId);
   const orders = invoices
     .map((invoice) => visibleInvoice({ account, invoice }))
     .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
