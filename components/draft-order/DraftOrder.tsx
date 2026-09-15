@@ -152,14 +152,16 @@ export function DraftOrder({
         if (quoteRow.sku) nextPricedBySku[quoteRow.sku] = quoteRow;
       }
 
-      // Log each stock check that failed, so the reason shows up in the log too.
-      for (const quoteRow of Object.values(nextPricedBySku)) {
-        if (quoteRow.stockError) {
-          logEvent(
-            `Stock check failed for ${quoteRow.name}: ${buyerErrorMessage(quoteRow.stockError)}`,
-            "stock",
-          );
-        }
+      // one log line for every item that failed, not one line per item.
+      const failedNames = Object.values(nextPricedBySku)
+        .filter((quoteRow) => quoteRow.stockError)
+        .map((quoteRow) => quoteRow.name);
+      if (failedNames.length > 0) {
+        const word = failedNames.length === 1 ? "item" : "items";
+        logEvent(
+          `Stock check failed for ${failedNames.length} ${word}: ${failedNames.join(", ")}`,
+          "stock",
+        );
       }
 
       setPricedBySku(nextPricedBySku);
@@ -294,10 +296,6 @@ export function DraftOrder({
     );
   });
 
-  const firstFailedError = failedLines[0]
-    ? pricedBySku[failedLines[0].sku]?.stockError
-    : undefined;
-
   // Empty cart: the "order placed" confirmation, or a hint.
   if (lines.length === 0) {
     return (
@@ -348,17 +346,14 @@ export function DraftOrder({
         </button>
       </div>
 
-      {/* Red banner if a stock check failed, otherwise the stale-data reminder. */}
+      {/* Red banner if a stock check failed, otherwise the stale-data reminder.
+          Kept generic, the row and the log below both have the real reason. */}
       {failedLines.length > 0 ? (
         <Alert variant="destructive" className="my-3 border-red-600 bg-red-50">
           <AlertTriangleIcon />
           <AlertDescription>
-            {failedLines[0].productName}:{" "}
-            {firstFailedError
-              ? buyerErrorMessage(firstFailedError)
-              : "Something went wrong checking stock."}
-            {failedLines.length > 1 &&
-              ` (${failedLines.length} items affected)`}
+            {failedLines.length} {failedLines.length === 1 ? "item" : "items"}{" "}
+            could not be checked. See below for details.
           </AlertDescription>
         </Alert>
       ) : hasStaleStock ? (
