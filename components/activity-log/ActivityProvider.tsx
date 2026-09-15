@@ -7,6 +7,7 @@ import { useCallback, useState } from "react";
 
 import { ActivityEvent, ActivityCategory } from "@/types";
 import { useIsBelowLg } from "@/hooks/use-mobile";
+import { useResetOnAccountSwitch } from "@/hooks/use-reset-on-account-switch";
 import { ActivityContext } from "./ActivityContext";
 
 export function ActivityProvider({ children }: { children: React.ReactNode }) {
@@ -41,6 +42,9 @@ export function ActivityProvider({ children }: { children: React.ReactNode }) {
 
   // Empty the log.
   const clearLog = useCallback(() => setEvents([]), []);
+
+  // The log belongs to one account, so switching accounts empties it.
+  useResetOnAccountSwitch(clearLog);
 
   return (
     <ActivityContext.Provider

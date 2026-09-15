@@ -86,7 +86,7 @@ export async function priceItems(
           // keep the sku so the draft can still show the row + its error.
           return {
             sku: product.sku,
-            name: item.rawText,
+            name: product.name,
             quantity: item.quantity,
             stock: quote.stock,
             stockError: quote.stockError,
@@ -112,7 +112,7 @@ export async function priceItems(
       } catch {
         // Only reached for a genuinely unexpected error, not a stock-check failure, that's already handled above via `quote.stockError`.
         return {
-          name: item.rawText,
+          name: product.name,
           quantity: item.quantity,
           stock: {
             type: "request failed",

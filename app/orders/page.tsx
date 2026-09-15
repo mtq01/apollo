@@ -8,6 +8,8 @@ import Link from "next/link";
 import { toast } from "sonner";
 
 import { AccountContext } from "@/components/account/AccountContext";
+import { accountList } from "@/components/account/AccountSelector";
+import { ActivityContext } from "@/components/activity-log/ActivityContext";
 import { DraftOrderContext } from "@/components/draft-order/DraftOrderContext";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,7 +43,12 @@ type OrderItem = {
   listPrice: number | null; // per unit, before discount
   internalCost: number | "hidden" | null; // per unit; "hidden" for non-admins
 };
-type PastOrder = { id: string; timestamp: string; items: OrderItem[] };
+type PastOrder = {
+  id: string;
+  accountId: number;
+  timestamp: string;
+  items: OrderItem[];
+};
 
 // A timestamp as a short date like "Sep 3, 2026".
 function formatDate(isoTimestamp: string) {
@@ -57,10 +64,15 @@ function formatDate(isoTimestamp: string) {
 export default function OrdersPage() {
   const { accountId } = useContext(AccountContext);
   const { addLines } = useContext(DraftOrderContext);
+  const { logEvent } = useContext(ActivityContext);
 
   const [orders, setOrders] = useState<PastOrder[] | null>(null); // null = loading
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [addedMessage, setAddedMessage] = useState<string | null>(null); // "Add selected" confirmation
+
+  // more than one account shows up only when admin is browsing everyone's orders.
+  const showAccountNames =
+    orders != null && new Set(orders.map((order) => order.accountId)).size > 1;
 
   // Load this account's orders. Re-runs when the account changes.
   useEffect(() => {
@@ -73,21 +85,27 @@ export default function OrdersPage() {
         const data = await response.json();
         if (cancelled) return;
         if (data?.error) {
-          setErrorMessage(data.error.message ?? "Couldn't load your orders.");
+          // Show this failure here and in the log.
+          const message = data.error.message ?? "Couldn't load your orders.";
+          setErrorMessage(message);
+          logEvent(message, "error");
           setOrders([]);
         } else {
           setErrorMessage(null);
           setOrders(data.orders ?? []);
         }
       } catch {
-        if (!cancelled) setErrorMessage("Couldn't load your orders.");
+        if (!cancelled) {
+          setErrorMessage("Couldn't load your orders.");
+          logEvent("Couldn't load your orders.", "error");
+        }
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [accountId]);
+  }, [accountId, logEvent]);
 
   // Add the ticked lines to the cart, tagged with the order, then confirm.
   function handleAdd(
@@ -138,7 +156,18 @@ export default function OrdersPage() {
           <ul className="flex w-full max-w flex-col gap-6">
             {orders.map((order) => (
               <li key={order.id}>
-                <OrderCard order={order} onAdd={handleAdd} />
+                <OrderCard
+                  order={order}
+                  onAdd={handleAdd}
+                  /* admin sees every account's orders, so name whose order this is.
+                     everyone else only ever sees their own, so skip it for them. */
+                  accountName={
+                    showAccountNames
+                      ? (accountList.find((a) => a.id === order.accountId)
+                          ?.name ?? `account ${order.accountId}`)
+                      : undefined
+                  }
+                />
               </li>
             ))}
           </ul>
@@ -151,12 +180,14 @@ export default function OrdersPage() {
 function OrderCard({
   order,
   onAdd,
+  accountName,
 }: {
   order: PastOrder;
   onAdd: (
     orderId: string,
     pickedItems: { sku: string; productName: string; quantity: number }[],
   ) => void;
+  accountName?: string; // shown only when admin is viewing more than one account's orders
 }) {
   // Ticked lines, keyed by sku. Lines with no catalog match start unticked.
   const [selected, setSelected] = useState<Record<string, boolean>>(() =>
@@ -214,6 +245,7 @@ function OrderCard({
           </Badge>
         </CardAction>
         <CardTitle>Purchase Order: {order.id}</CardTitle>
+        {accountName && <CardDescription>Account: {accountName}</CardDescription>}
         <CardDescription>
           Submitted: {formatDate(order.timestamp)}
         </CardDescription>

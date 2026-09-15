@@ -17,6 +17,7 @@ import {
   visibleInvoice,
 } from "@/lib/erp/invoice";
 import { summarizeOrder } from "@/lib/erp/summarizeOrder";
+import { getQuoteForProduct } from "@/lib/erp/productQuote";
 
 // Find the highest inv-<n> id we have and return the next one.
 function nextInvoiceId(existing: Invoice[]): string {
@@ -59,8 +60,14 @@ export async function GET(request: Request) {
     );
   }
 
+  /* admin is staff, not a customer, so they can browse every account's
+     orders, not just their own. everyone else only sees their own. */
+  const invoices =
+    account.role === "admin"
+      ? await getAllInvoices()
+      : await getAccountInvoices(accountId);
+
   // Read this account's stored invoices and hide fields by role. Newest first.
-  const invoices = await getAccountInvoices(accountId);
   const orders = invoices
     .map((invoice) => visibleInvoice({ account, invoice }))
     .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
@@ -133,6 +140,31 @@ export async function POST(request: Request) {
         error: {
           type: "not found",
           message: `Not in the catalog: ${unknown.map((i) => i.sku).join(", ")}`,
+        } satisfies ErrorType,
+      },
+      { status: 400 },
+    );
+  }
+
+  // check stock for real right now, do not trust whatever the cart last showed. an order should never be placed on stock that was never confirmed, or that just failed to confirm.
+  const stockChecks = await Promise.all(
+    items.map(async (item) => {
+      const product = (catalog as Product[]).find((p) => p.sku === item.sku)!;
+      const quote = await getQuoteForProduct({ account, product });
+      return { productName: product.name, stockError: quote.stockError };
+    }),
+  );
+
+  const failedStockChecks = stockChecks.filter((check) => check.stockError);
+
+  if (failedStockChecks.length > 0) {
+    return Response.json(
+      {
+        error: {
+          type: failedStockChecks[0].stockError!.type,
+          message: `Stock could not be confirmed for: ${failedStockChecks
+            .map((check) => check.productName)
+            .join(", ")}`,
         } satisfies ErrorType,
       },
       { status: 400 },

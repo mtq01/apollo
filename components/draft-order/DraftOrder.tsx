@@ -26,7 +26,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { AlertTriangleIcon, CircleX } from "lucide-react";
+import { AlertTriangleIcon, CircleX, Loader2 } from "lucide-react";
 import type { ErrorType, ForcedFailure } from "@/types";
 import { TAX_RATE } from "@/lib/erp/summarizeOrder";
 
@@ -47,9 +47,11 @@ type PricedRow = {
   stockLastUpdated?: string | "hidden" | "error"; // when the ERP last refreshed this number
 };
 
-// Wait this long after the last change before re-pricing, so we don't fire a
-// request on every keystroke.
+// Wait this long after the last change before re-pricing, so we don't fire a request on every keystroke.
 const PRICE_REFRESH_DELAY_MS = 500;
+
+// stock numbers older than this trigger the "confirm before ordering" message
+const STALE_STOCK_AFTER_MS = 2 * 60 * 60 * 1000; // 2 hours
 
 // A server timestamp as a short time like "2:45 PM".
 function formatStockCheckTime(isoTimestamp: string) {
@@ -69,12 +71,41 @@ function formatSourceDate(isoTimestamp: string) {
   });
 }
 
+// small pulsing placeholder for a cell whose line has not been priced yet.
+// different from "—", which means there is nothing to show, not "wait for it."
+function LoadingCell() {
+  return (
+    <span className="inline-block h-3 w-10 animate-pulse rounded bg-gray-200" />
+  );
+}
+
+// was this row's stock number already old when the quote was built?
+function isStale(pricedRow: PricedRow | undefined): boolean {
+  const checkedAt = pricedRow?.stockLastUpdated;
+  const quotedAt = pricedRow?.calculatedAt;
+  if (
+    typeof checkedAt !== "string" ||
+    checkedAt === "hidden" ||
+    checkedAt === "error" ||
+    !quotedAt
+  ) {
+    return false;
+  }
+  return (
+    new Date(quotedAt).getTime() - new Date(checkedAt).getTime() >
+    STALE_STOCK_AFTER_MS
+  );
+}
+
 export function DraftOrder({
   forceFailure,
+  setForceFailureAction,
   isLoading,
 }: {
   // From the demo dropdown; makes the re-price fail on purpose.
   forceFailure?: ForcedFailure | null;
+  // clears the dropdown after one use, so it only affects the batch that asked for it. named ...Action so next treats this function prop as safe at the "use client" boundary.
+  setForceFailureAction?: (value: ForcedFailure | null) => void;
   isLoading?: boolean;
 }) {
   // The active account. Prices depend on it; actions are blocked until one is picked.
@@ -89,6 +120,22 @@ export function DraftOrder({
   // Latest prices from the server, keyed by sku.
   const [pricedBySku, setPricedBySku] = useState<Record<string, PricedRow>>({});
 
+  // same data as pricedBySku, kept in a ref too. refreshPrices reads this instead of the state, so it does not need pricedBySku as a dependency and does not re-trigger itself every time it saves a new price.
+  const pricedBySkuRef = useRef(pricedBySku);
+  const updatePricedBySku = useCallback((next: Record<string, PricedRow>) => {
+    pricedBySkuRef.current = next;
+    setPricedBySku(next);
+  }, []);
+
+  // which account the cached prices belong to. switching accounts means prices and stock could be different for everyone, so check everyone again.
+  const lastPricedAccountId = useRef(accountId);
+
+  // always has the latest forceFailure, read inside refreshPrices. resetting forceFailure should not by itself start a new price check, so it stays out of refreshPrices' own dependency list.
+  const forceFailureRef = useRef(forceFailure);
+  useEffect(() => {
+    forceFailureRef.current = forceFailure;
+  }, [forceFailure]);
+
   // True while a price request is running.
   const [isPricing, setIsPricing] = useState(false);
 
@@ -98,22 +145,46 @@ export function DraftOrder({
   // True while "Place order" is running.
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
 
-  // The new order id after a successful "Place order"; shown as a confirmation.
+  // The new order id after a successful "Place order". shown as a confirmation.
   const [placedOrderId, setPlacedOrderId] = useState<string | null>(null);
 
   // AbortController for the in-flight price request, so a stale response can't overwrite newer prices.
   const priceRequestRef = useRef<AbortController | null>(null);
 
-  /* Re-price every line. In useCallback so the timer effect only restarts when
-     its inputs change. */
+  // Re-price the cart. In useCallback so the timer effect only restarts when its inputs change.
   const refreshPrices = useCallback(async () => {
     // Drop any earlier request so a slow one can't land after a newer one.
     priceRequestRef.current?.abort();
 
     // Nothing to price without an account or items.
     if (!accountId || lines.length === 0) {
-      setPricedBySku({});
+      updatePricedBySku({});
       setErrorMessage(null);
+      return;
+    }
+
+    // an account switch means every line needs a fresh check. otherwise only check lines with no cached price, a past failure, or stale stock. a line that already priced fine keeps its cached result.
+    const needsFullRefresh = lastPricedAccountId.current !== accountId;
+    lastPricedAccountId.current = accountId;
+
+    const linesToCheck = needsFullRefresh
+      ? lines
+      : lines.filter((line) => {
+          const cached = pricedBySkuRef.current[line.sku];
+          return !cached || cached.stockError || isStale(cached);
+        });
+
+    // carry over anything not being rechecked, drop lines removed from the cart
+    const carriedOver: Record<string, PricedRow> = {};
+    for (const line of lines) {
+      const cached = pricedBySkuRef.current[line.sku];
+      const isBeingChecked = linesToCheck.some((l) => l.sku === line.sku);
+      if (cached && !isBeingChecked) carriedOver[line.sku] = cached;
+    }
+
+    // nothing new to check, just apply the removals and stop.
+    if (linesToCheck.length === 0) {
+      updatePricedBySku(carriedOver);
       return;
     }
 
@@ -124,42 +195,81 @@ export function DraftOrder({
     setErrorMessage(null);
 
     try {
-      // Price every line. forceFailure is only set from the demo dropdown.
+      // Price only the lines that need it. forceFailure is only set from the demo dropdown.
+      const forceFailureForThisBatch = forceFailureRef.current;
       const response = await fetch("/api/quote/items", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           accountId,
-          items: lines.map((line) => ({
+          items: linesToCheck.map((line) => ({
             sku: line.sku,
             quantity: line.quantity,
           })),
-          forceFailure: forceFailure ?? undefined,
+          forceFailure: forceFailureForThisBatch ?? undefined,
         }),
         signal: abortController.signal,
       });
+
+      // a forced failure only applies to this one batch. resetting it here does not start another price check, since refreshPrices reads forceFailure from a ref instead of depending on it directly.
+      if (forceFailureForThisBatch) setForceFailureAction?.(null);
+
       const data = await response.json();
 
       if (!response.ok) {
-        setErrorMessage(data?.error?.message ?? "Couldn't price this order.");
+        // Show this failure in the cart and in the log.
+        const message = data?.error?.message ?? "Couldn't price this order.";
+        setErrorMessage(message);
+        logEvent(message, "error");
         return;
       }
 
-      // Index the priced rows by sku.
-      const nextPricedBySku: Record<string, PricedRow> = {};
+      // Start from what we carried over, then add the fresh results.
+      const nextPricedBySku: Record<string, PricedRow> = { ...carriedOver };
       for (const quoteRow of (data.quotes ?? []) as PricedRow[]) {
         if (quoteRow.sku) nextPricedBySku[quoteRow.sku] = quoteRow;
       }
-      setPricedBySku(nextPricedBySku);
+
+      // one log line per reason a stock check failed, not one line per item, and not one line for every reason mixed together either.
+      const failedByReason = new Map<string, string[]>();
+      for (const quoteRow of Object.values(nextPricedBySku)) {
+        if (!quoteRow.stockError) continue;
+        const reason = buyerErrorMessage(quoteRow.stockError);
+        const names = failedByReason.get(reason) ?? [];
+        names.push(quoteRow.name);
+        failedByReason.set(reason, names);
+      }
+      for (const [reason, names] of failedByReason) {
+        const word = names.length === 1 ? "item" : "items";
+        logEvent(
+          `Stock check failed for ${names.length} ${word}: ${names.join(", ")}.  ${reason}`,
+          "stock",
+        );
+      }
+
+      // stale stock is not an error, the check still succeeds, so it needs its own log line instead of piggybacking on the one above.
+      const staleNames = Object.values(nextPricedBySku)
+        .filter((quoteRow) => isStale(quoteRow))
+        .map((quoteRow) => quoteRow.name);
+      if (staleNames.length > 0) {
+        const word = staleNames.length === 1 ? "item" : "items";
+        logEvent(
+          `Stock data may be a few hours old for ${staleNames.length} ${word}: ${staleNames.join(", ")}`,
+          "stock",
+        );
+      }
+
+      updatePricedBySku(nextPricedBySku);
     } catch {
       // Aborts land here too; only a real failure gets a message.
       if (!abortController.signal.aborted) {
         setErrorMessage("Couldn't reach the server.");
+        logEvent("Could not reach the server", "error");
       }
     } finally {
       if (!abortController.signal.aborted) setIsPricing(false);
     }
-  }, [accountId, lines, forceFailure]);
+  }, [accountId, lines, logEvent, updatePricedBySku, setForceFailureAction]);
 
   // Debounce: every change clears the old timer and starts a new one, so only a pause triggers the re-price.
   useEffect(() => {
@@ -169,7 +279,8 @@ export function DraftOrder({
 
   // Place the order via POST /api/orders, then remember the id and empty the cart.
   async function placeOrder() {
-    if (!accountId || lines.length === 0) return;
+    // never place an order with a line whose stock could not be confirmed. the button is disabled for this too, this is a second check just in case.
+    if (!accountId || lines.length === 0 || failedLines.length > 0) return;
     setIsPlacingOrder(true);
     setErrorMessage(null);
     try {
@@ -259,31 +370,7 @@ export function DraftOrder({
     return pricedRow?.stock === "error" || pricedRow?.stockError != null;
   });
 
-  // stock numbers older than this trigger the "confirm before ordering" msg
-  const STALE_STOCK_AFTER_MS = 2 * 60 * 60 * 1000; // 2 hours
-
-  const hasStaleStock = lines.some((line) => {
-    const pricedRow = pricedBySku[line.sku];
-    const checkedAt = pricedRow?.stockLastUpdated;
-    const quotedAt = pricedRow?.calculatedAt;
-    if (
-      typeof checkedAt !== "string" ||
-      checkedAt === "hidden" ||
-      checkedAt === "error" ||
-      !quotedAt
-    ) {
-      return false;
-    }
-    // Was the stock number already old when the quote was built?
-    return (
-      new Date(quotedAt).getTime() - new Date(checkedAt).getTime() >
-      STALE_STOCK_AFTER_MS
-    );
-  });
-
-  const firstFailedError = failedLines[0]
-    ? pricedBySku[failedLines[0].sku]?.stockError
-    : undefined;
+  const hasStaleStock = lines.some((line) => isStale(pricedBySku[line.sku]));
 
   // Empty cart: the "order placed" confirmation, or a hint.
   if (lines.length === 0) {
@@ -335,17 +422,20 @@ export function DraftOrder({
         </button>
       </div>
 
-      {/* Red banner if a stock check failed, otherwise the stale-data reminder. */}
-      {failedLines.length > 0 ? (
+      {/* Purple while the buyer's last submit is still being looked up, then
+          the red stock-failure banner, then the stale-data reminder.
+          Kept generic, the row and the log below both have the real reason. */}
+      {isLoading ? (
+        <Alert className="my-3 border-purple-300 bg-purple-100 text-black">
+          <Loader2 className="animate-spin" />
+          <AlertDescription>Updating cart...</AlertDescription>
+        </Alert>
+      ) : failedLines.length > 0 ? (
         <Alert variant="destructive" className="my-3 border-red-600 bg-red-50">
           <AlertTriangleIcon />
           <AlertDescription>
-            {failedLines[0].productName}:{" "}
-            {firstFailedError
-              ? buyerErrorMessage(firstFailedError)
-              : "Something went wrong checking stock."}
-            {failedLines.length > 1 &&
-              ` (${failedLines.length} items affected)`}
+            {failedLines.length} {failedLines.length === 1 ? "item" : "items"}{" "}
+            could not be checked. See below for details.
           </AlertDescription>
         </Alert>
       ) : hasStaleStock ? (
@@ -376,6 +466,8 @@ export function DraftOrder({
           {lines.map((line) => {
             // The priced row for this line, if any.
             const pricedRow = pricedBySku[line.sku];
+            // no priced row yet means the line has never been checked. it is waiting on the current price request, not permanently blank.
+            const isRowLoading = !pricedRow;
             const unitPrice = pricedRow?.price;
             const stockLevel = pricedRow?.stock;
             const stockCheckedAt =
@@ -427,13 +519,19 @@ export function DraftOrder({
 
                 {/* Price per unit. */}
                 <TableCell>
-                  {typeof unitPrice === "number"
-                    ? `$${unitPrice.toFixed(2)}`
-                    : "—"}
+                  {typeof unitPrice === "number" ? (
+                    `$${unitPrice.toFixed(2)}`
+                  ) : isRowLoading ? (
+                    <LoadingCell />
+                  ) : (
+                    "—"
+                  )}
                 </TableCell>
 
-                {/* Stock count + check time, or "—" if hidden, or an error. */}
-                <TableCell>
+                {/* Stock count + check time, or "—" if hidden, or an error.
+                    whitespace-normal so a long error message wraps here
+                    instead of forcing the whole table wider. */}
+                <TableCell className="whitespace-normal">
                   {typeof stockLevel === "number" ? (
                     <>
                       {stockLevel}
@@ -455,6 +553,8 @@ export function DraftOrder({
                     <span className="text-red-900">
                       {buyerErrorMessage(stockLevel)}
                     </span>
+                  ) : isRowLoading ? (
+                    <LoadingCell />
                   ) : (
                     "—"
                   )}
@@ -462,25 +562,39 @@ export function DraftOrder({
 
                 {/* Lead time in days. */}
                 <TableCell>
-                  {pricedRow?.leadTime != null
-                    ? `${pricedRow.leadTime} ${
-                        pricedRow.leadTime === 1 ? "day" : "days"
-                      }`
-                    : "—"}
+                  {pricedRow?.leadTime != null ? (
+                    `${pricedRow.leadTime} ${
+                      pricedRow.leadTime === 1 ? "day" : "days"
+                    }`
+                  ) : isRowLoading ? (
+                    <LoadingCell />
+                  ) : (
+                    "—"
+                  )}
                 </TableCell>
 
                 {/* Warehouse, or "Restricted". */}
                 <TableCell>
-                  {pricedRow?.warehouse === "hidden"
-                    ? "Restricted"
-                    : (pricedRow?.warehouse ?? "—")}
+                  {pricedRow?.warehouse === "hidden" ? (
+                    "Restricted"
+                  ) : pricedRow?.warehouse ? (
+                    pricedRow.warehouse
+                  ) : isRowLoading ? (
+                    <LoadingCell />
+                  ) : (
+                    "—"
+                  )}
                 </TableCell>
 
                 {/* Price per unit × qty. */}
                 <TableCell className="text-right">
-                  {typeof unitPrice === "number"
-                    ? `$${(unitPrice * line.quantity).toFixed(2)}`
-                    : "—"}
+                  {typeof unitPrice === "number" ? (
+                    `$${(unitPrice * line.quantity).toFixed(2)}`
+                  ) : isRowLoading ? (
+                    <LoadingCell />
+                  ) : (
+                    "—"
+                  )}
                 </TableCell>
 
                 {/* Remove Item line. */}
@@ -522,15 +636,16 @@ export function DraftOrder({
             <TableCell className="text-right">${total.toFixed(2)}</TableCell>
             <TableCell />
           </TableRow>
-          <TableRow>
-            <TableCell colSpan={6}>Internal Cost</TableCell>
-            <TableCell className="text-right">
-              {internalCostIsHidden
-                ? "Restricted"
-                : `$${internalCost.toFixed(2)}`}
-            </TableCell>
-            <TableCell />
-          </TableRow>
+          {/* Hide this row from Manager/Buyer accounts completely. */}
+          {!internalCostIsHidden && (
+            <TableRow>
+              <TableCell colSpan={6}>Internal Cost</TableCell>
+              <TableCell className="text-right">
+                ${internalCost.toFixed(2)}
+              </TableCell>
+              <TableCell />
+            </TableRow>
+          )}
         </TableFooter>
       </Table>
 
@@ -538,11 +653,21 @@ export function DraftOrder({
         <p className="mt-2 text-sm text-red-700">{errorMessage}</p>
       )}
 
-      {/* Place order. Disabled while busy or with no account. */}
+      {/* can't place an order while a line's stock could not be confirmed. */}
+      {failedLines.length > 0 && (
+        <p className="mt-2 text-sm text-red-700">
+          Fix or remove the item(s) that could not be checked before placing
+          this order.
+        </p>
+      )}
+
+      {/* Place order. Disabled while busy, with no account, or a stock check failed. */}
       <div className="mt-4">
         <Button
           onClick={placeOrder}
-          disabled={isPlacingOrder || isPricing || !accountId}
+          disabled={
+            isPlacingOrder || isPricing || !accountId || failedLines.length > 0
+          }
           className="rounded-lg bg-black px-4 py-2 text-apollo-light hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isPlacingOrder ? "Placing…" : "Place order"}
