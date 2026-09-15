@@ -26,7 +26,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { AlertTriangleIcon, CircleX } from "lucide-react";
+import { AlertTriangleIcon, CircleX, Loader2 } from "lucide-react";
 import type { ErrorType, ForcedFailure } from "@/types";
 import { TAX_RATE } from "@/lib/erp/summarizeOrder";
 
@@ -69,6 +69,14 @@ function formatSourceDate(isoTimestamp: string) {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+// small pulsing placeholder for a cell whose line has not been priced yet.
+// different from "—", which means there is nothing to show, not "wait for it."
+function LoadingCell() {
+  return (
+    <span className="inline-block h-3 w-10 animate-pulse rounded bg-gray-200" />
+  );
 }
 
 // was this row's stock number already old when the quote was built?
@@ -417,9 +425,15 @@ export function DraftOrder({
         </button>
       </div>
 
-      {/* Red banner if a stock check failed, otherwise the stale-data reminder.
+      {/* Purple while the buyer's last submit is still being looked up, then
+          the red stock-failure banner, then the stale-data reminder.
           Kept generic, the row and the log below both have the real reason. */}
-      {failedLines.length > 0 ? (
+      {isLoading ? (
+        <Alert className="my-3 border-purple-300 bg-purple-100 text-black">
+          <Loader2 className="animate-spin" />
+          <AlertDescription>Updating cart...</AlertDescription>
+        </Alert>
+      ) : failedLines.length > 0 ? (
         <Alert variant="destructive" className="my-3 border-red-600 bg-red-50">
           <AlertTriangleIcon />
           <AlertDescription>
@@ -455,6 +469,8 @@ export function DraftOrder({
           {lines.map((line) => {
             // The priced row for this line, if any.
             const pricedRow = pricedBySku[line.sku];
+            // no priced row yet means the line has never been checked. it is waiting on the current price request, not permanently blank.
+            const isRowLoading = !pricedRow;
             const unitPrice = pricedRow?.price;
             const stockLevel = pricedRow?.stock;
             const stockCheckedAt =
@@ -506,9 +522,13 @@ export function DraftOrder({
 
                 {/* Price per unit. */}
                 <TableCell>
-                  {typeof unitPrice === "number"
-                    ? `$${unitPrice.toFixed(2)}`
-                    : "—"}
+                  {typeof unitPrice === "number" ? (
+                    `$${unitPrice.toFixed(2)}`
+                  ) : isRowLoading ? (
+                    <LoadingCell />
+                  ) : (
+                    "—"
+                  )}
                 </TableCell>
 
                 {/* Stock count + check time, or "—" if hidden, or an error.
@@ -536,6 +556,8 @@ export function DraftOrder({
                     <span className="text-red-900">
                       {buyerErrorMessage(stockLevel)}
                     </span>
+                  ) : isRowLoading ? (
+                    <LoadingCell />
                   ) : (
                     "—"
                   )}
@@ -543,25 +565,39 @@ export function DraftOrder({
 
                 {/* Lead time in days. */}
                 <TableCell>
-                  {pricedRow?.leadTime != null
-                    ? `${pricedRow.leadTime} ${
-                        pricedRow.leadTime === 1 ? "day" : "days"
-                      }`
-                    : "—"}
+                  {pricedRow?.leadTime != null ? (
+                    `${pricedRow.leadTime} ${
+                      pricedRow.leadTime === 1 ? "day" : "days"
+                    }`
+                  ) : isRowLoading ? (
+                    <LoadingCell />
+                  ) : (
+                    "—"
+                  )}
                 </TableCell>
 
                 {/* Warehouse, or "Restricted". */}
                 <TableCell>
-                  {pricedRow?.warehouse === "hidden"
-                    ? "Restricted"
-                    : (pricedRow?.warehouse ?? "—")}
+                  {pricedRow?.warehouse === "hidden" ? (
+                    "Restricted"
+                  ) : pricedRow?.warehouse ? (
+                    pricedRow.warehouse
+                  ) : isRowLoading ? (
+                    <LoadingCell />
+                  ) : (
+                    "—"
+                  )}
                 </TableCell>
 
                 {/* Price per unit × qty. */}
                 <TableCell className="text-right">
-                  {typeof unitPrice === "number"
-                    ? `$${(unitPrice * line.quantity).toFixed(2)}`
-                    : "—"}
+                  {typeof unitPrice === "number" ? (
+                    `$${(unitPrice * line.quantity).toFixed(2)}`
+                  ) : isRowLoading ? (
+                    <LoadingCell />
+                  ) : (
+                    "—"
+                  )}
                 </TableCell>
 
                 {/* Remove Item line. */}
