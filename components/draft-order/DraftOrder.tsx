@@ -122,13 +122,10 @@ export function DraftOrder({
 
   // same data as pricedBySku, kept in a ref too. refreshPrices reads this instead of the state, so it does not need pricedBySku as a dependency and does not re-trigger itself every time it saves a new price.
   const pricedBySkuRef = useRef(pricedBySku);
-  const updatePricedBySku = useCallback(
-    (next: Record<string, PricedRow>) => {
-      pricedBySkuRef.current = next;
-      setPricedBySku(next);
-    },
-    [],
-  );
+  const updatePricedBySku = useCallback((next: Record<string, PricedRow>) => {
+    pricedBySkuRef.current = next;
+    setPricedBySku(next);
+  }, []);
 
   // which account the cached prices belong to. switching accounts means prices and stock could be different for everyone, so check everyone again.
   const lastPricedAccountId = useRef(accountId);
@@ -639,15 +636,16 @@ export function DraftOrder({
             <TableCell className="text-right">${total.toFixed(2)}</TableCell>
             <TableCell />
           </TableRow>
-          <TableRow>
-            <TableCell colSpan={6}>Internal Cost</TableCell>
-            <TableCell className="text-right">
-              {internalCostIsHidden
-                ? "Restricted"
-                : `$${internalCost.toFixed(2)}`}
-            </TableCell>
-            <TableCell />
-          </TableRow>
+          {/* Hide this row from Manager/Buyer accounts completely. */}
+          {!internalCostIsHidden && (
+            <TableRow>
+              <TableCell colSpan={6}>Internal Cost</TableCell>
+              <TableCell className="text-right">
+                ${internalCost.toFixed(2)}
+              </TableCell>
+              <TableCell />
+            </TableRow>
+          )}
         </TableFooter>
       </Table>
 
