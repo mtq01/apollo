@@ -310,7 +310,7 @@ export function DraftOrder({
       setPlacedOrderId(data.order.id);
       clear();
     } catch {
-      setErrorMessage("Couldn't reach the server.");
+      setErrorMessage("This demo doesn't have a database connected, so orders can't actually be saved. In a real deployment this would complete the checkout process.");
       logEvent("Could not reach the server", "error");
     } finally {
       setIsPlacingOrder(false);
