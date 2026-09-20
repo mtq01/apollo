@@ -82,19 +82,19 @@ Create `.env.local` with `ANTHROPIC_API_KEY=your_key_here` (get one at [console.
 
 ## What went wrong, and what we'd change
 
-The full log of calls I made is in [DECISIONS.md](DECISIONS.md). These are the ones that taught me the most.
+The full log of calls we made is in [DECISIONS.md](DECISIONS.md). These are the ones that taught me the most.
 
 **1. Claude quietly "fixed" the buyer's typos.**
-`"2 wireless mise"` came back as a finished quote for Wireless Mouse with no sign the words had been changed, while `"2 wireless mice"` (correctly spelled) failed to match and only got a suggestion. Worse, the corrected input scored a higher `confidence` than the clean one, so confidence couldn't be trusted as the signal. I measured this rather than guessing, and proposed a `correctedFrom` field on each parsed item. **Still open.** Next we'd ship the soft version: still quote it, but mark the row "you typed 'mise'".
+`"2 wireless mise"` came back as a finished quote for Wireless Mouse with no sign the words had been changed, while `"2 wireless mice"` (correctly spelled) failed to match and only got a suggestion. Worse, the corrected input scored a higher `confidence` than the clean one, so confidence couldn't be trusted as the signal. We measured this rather than guessing, and proposed a `correctedFrom` field on each parsed item. **Still open.** Next we'd ship the soft version: still quote it, but mark the row "you typed 'mise'".
 
 **2. Orders were re-priced every time they loaded.**
-Placing an order saved only SKUs and quantities, and the Orders page priced them fresh on each visit, so the totals shown were never the totals the buyer agreed to. I merged orders and invoices: placing an order now prices once and saves a full invoice, and readers only display stored numbers. A placed order can even be pasted back into the reorder box by its PO number.
+Placing an order saved only SKUs and quantities, and the Orders page priced them fresh on each visit, so the totals shown were never the totals the buyer agreed to. We merged orders and invoices: placing an order now prices once and saves a full invoice, and readers only display stored numbers. A placed order can even be pasted back into the reorder box by its PO number.
 
 **3. A fix for one bug hid another.**
-Forcing a stock failure from the demo dropdown also flagged every item already in the cart, because the cart re-checked every line on any change. I made it re-check only new, failed, or stale lines. That introduced a race: resetting the "force failure" flag was itself a dependency of the re-price function, so the reset triggered an unforced re-price that quietly overwrote the failure I was trying to show. The fix was to read the flag through a ref. The lesson was to re-test the original symptom after every fix.
+Forcing a stock failure from the demo dropdown also flagged every item already in the cart, because the cart re-checked every line on any change. We made it re-check only new, failed, or stale lines. That introduced a race: resetting the "force failure" flag was itself a dependency of the re-price function, so the reset triggered an unforced re-price that quietly overwrote the failure we were trying to show. The fix was to read the flag through a ref. The lesson was to re-test the original symptom after every fix.
 
 **4. "Reorder my last order" mixed two invoices.**
-I let Claude read the order history and choose products, and it once merged items from two invoices and lost track of where each came from. Now Claude only picks an invoice id, and plain code fetches that exact invoice. The trade-off is that this path always returns the whole invoice, so partial reorders need typed input.
+We let Claude read the order history and choose products, and it once merged items from two invoices and lost track of where each came from. Now Claude only picks an invoice id, and plain code fetches that exact invoice. The trade-off is that this path always returns the whole invoice, so partial reorders need typed input.
 
 **5. A failed stock check didn't stop an order.**
 The row showed the error, but the button still worked, and the server only checked that each SKU existed. "Place order" now disables on any stock error, and `POST /api/orders` re-verifies stock fresh (uncached) before saving.
