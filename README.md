@@ -1,133 +1,109 @@
 # Apollo
 
-Apollo is a front end for reordering products. It sits in front of a company's real ERP system and gives buyers a fast, honest way to place a repeat order.
+A front end for reordering products. It sits in front of a company's ERP and gives B2B buyers a fast, honest way to place a repeat order.
+
+**Live demo: [apollo-demo.gogogravity.com](https://apollo-demo.gogogravity.com)**
+
+Pick an account, then try one of the quick-action buttons on the Reorder page. Every account, product, and order is made up, and the ERP is a mock.
 
 ## The problem it solves
 
-This project came from a talk with the owner of a B2B ecommerce agency in Kelowna. He described the same front end problems he sees over and over:
+The idea came from a talk with the owner of a B2B commerce agency in Kelowna. He described the same front end problems he sees over and over:
 
 - **Stale stock numbers.** A live stock check can return a count that is hours old, so the buyer sees a number that is already wrong.
 - **Pricing and stock depend on the account.** The same product can cost more, or show different availability, to two different buyers.
-- **Buyers do not browse, they reorder.** Returning customers do not want to click through a catalog. They paste a list of SKUs or pull up an old order.
-- **Bad error messages.** ERPs hand back generic codes instead of telling the buyer what actually went wrong.
+- **Buyers do not browse, they reorder.** Returning customers paste a list of SKUs or pull up an old order.
+- **Bad error messages.** ERPs hand back generic codes instead of telling the buyer what went wrong.
 
-Apollo fixes the buyer's experience around these problems. It does not replace the ERP.
+Apollo fixes the buyer's experience around these problems. It does not replace the ERP, and Claude is only used for the parts that need judgment.
 
-## What Apollo is
-
-- A front end reorder tool. It shows account specific pricing and stock, and it lets a buyer build an order from a pasted list, a past order, or a PO number.
-- Honest about failure. Stale stock is flagged, not hidden. A SKU that does not match anything gets close match suggestions, not a dead end.
-- Built around one connection point to its data (an "adapter"). Right now that points at fake JSON files. The rest of the app does not know the data is fake, so the same connection could later point at a real ERP with no other changes.
-
-## What Apollo is not
-
-- Not a full ERP. It does not manage inventory, accounting, or operations.
-- Not a store. There is no catalog to shop through. There is a cart, but you fill it by pasting or reordering, not by browsing.
-- Not a plugin. It is a standalone Next.js app, not something installed into WordPress or another platform.
-- Not connected to anything real. Every account, product, and order is made up.
-- Not "AI first." Claude is only used for the parts that need judgment. Everything else is plain code.
-
-## How the buyer uses it
+## What it does
 
 ### Reorder page
 
-There is one text box. The buyer can paste any of these:
+One text box. The buyer can paste any of these:
 
 - A list of SKUs, like `PER-2284, ACC-3391`
 - A quantity with a SKU, like `PER-2284 x2`
-- A messy product list written in plain words
+- A messy product list in plain words
 - A PO number, like `inv-1001`
 
 If the text is only product codes, Apollo prices it straight from the catalog. Anything with real words goes through Claude, which turns it into clean SKU and quantity pairs.
 
-Whatever comes back drops into a section called "Your Cart" below the box. The buyer can:
+Results drop into "Your Cart", where the buyer can:
 
-- Change any quantity
-- Remove a line
-- Paste more items, which get added to the same cart
-- See a running Sub Total, Discount, Tax, Total, and, for admin accounts, Internal Cost
+- Change quantities, remove lines, or paste more items into the same cart
+- See Sub Total, Discount, Tax, and Total (plus Internal Cost for admins)
+- See a tag on lines that came from a PO or a suggestion
+- Place the order once every line has confirmed stock
 
-The cart re prices itself after every change, so the numbers are always current.
-
-Items that could not be added show in a "Couldn't add these" list, with the two or three closest catalog matches to pick from.
-
-When the buyer is ready, "Place order" saves it to the order history.
+The cart re-prices itself after every change. Items that could not be matched show in a "Couldn't add these" list with the closest catalog matches to pick from.
 
 ### Orders page
 
-The Orders page lists the account's past orders. Each one is a card. The buyer ticks the lines they want, adjusts quantities, and adds them to the cart. A line whose product has left the catalog is greyed out.
+Lists the account's past orders as cards. The buyer ticks lines, adjusts quantities, and adds them to the cart. A line whose product has left the catalog is greyed out.
 
-### PO numbers
+### Accounts and roles
 
-Typing a PO number like `inv-1001` pulls that order's products straight into the cart, the same as reordering a past order.
+- **Buyer** and **manager** are customers. Each sees only their own pricing, stock, and orders.
+- **Admin** is the supplier's own staff. Admin sees internal cost and every account's past orders.
 
-## Accounts and roles
-
-Apollo has three roles: buyer, manager, and admin.
-
-Buyer and manager are customers. Each one only ever sees their own account: their own pricing, their own stock, their own past orders.
-
-Admin is different. Admin is the supplier's own staff, not a customer. Admin sees internal cost, the one number a buyer or manager is never shown, and can browse every account's past orders, not just their own.
-
-One gap worth knowing about: Admin has no way to place an order "on behalf of" a customer yet. An order placed while acting as Admin is saved under Admin's own account, the same as a real customer buying for themselves. A believable next step would be assisted ordering, where staff place an order for a customer over the phone, but that is not built yet.
-
-## How failures are handled
-
-Instead of one generic error, Apollo gives a specific answer for each case.
+### Handling failures
 
 | Situation | What the buyer sees |
 | --- | --- |
-| Stock check times out, but a cached number exists | The cached number, with its timestamp, and a note to confirm before ordering |
-| Stock check times out, and there is no cached number | A plain message that stock cannot be confirmed right now |
-| A SKU does not match anything | The two or three closest matches, not a silent failure |
+| Stock check times out, cached number exists | The cached number with its timestamp, and a note to confirm before ordering |
+| Stock check times out, no cached number | A plain message that stock cannot be confirmed right now |
+| A SKU matches nothing | The two or three closest matches, not a silent failure |
+| Any line has a failed stock check | "Place order" is disabled, and the server re-checks stock again before saving |
 
-## The activity log
-
-Every action adds a short, timestamped, plain language line to an activity log on the side of the screen. For example:
-
-- Price calculated: $27.00 for Wireless Mouse
-- Stock check attempt 1 failed
-- Stock check failed for Wireless Mouse: the service took too long
-
-It works as a receipt and as a way to see what the app is actually doing.
+A timestamped activity log on the side of the screen records each step (prices, stock attempts, failures) as a plain-language receipt.
 
 ## How the work is split
 
-Plain code handles anything with one right answer:
+Plain code handles anything with one right answer: account rules, exact SKU lookup, pricing, stock rules, and calling the mock ERP with retries and timeouts.
 
-- Picking an account or role
-- Looking up an exact SKU
-- Pricing and stock rules
-- Calling the fake ERP and catching timeouts
+Claude (Haiku 4.5) handles ambiguity: turning a messy pasted list into SKU and quantity pairs, and picking which order the buyer means. Its output is checked with Zod, runs at `temperature: 0`, and is limited to five tool-call rounds.
 
-Claude handles anything with judgment or ambiguity:
-
-- Turning a messy pasted list into clean SKU and quantity pairs
-- Suggesting the closest match for a SKU that does not match exactly
-- Explaining a failure in plain words
+All data goes through one adapter over JSON files. The rest of the app doesn't know the data is fake, so it could point at a real ERP later.
 
 ## Stack
 
-- Next.js (App Router)
-- TypeScript
-- Tailwind CSS
-- Claude API (Haiku 4.5 for most calls)
-- JSON files as a stand in database. No real database or login yet.
-- React Context for the active account, the cart, and the activity log
-- Zod to check the shape of Claude's output and every request body
-- shadcn for components and UI
+Next.js (App Router), React, TypeScript, Tailwind CSS, shadcn/ui, Zod, React Context (account, cart, activity log), Claude API.
 
-## Getting started
+## Running it locally
 
 ```bash
 npm install
 npm run dev
 ```
 
-Create a `.env.local` file in the project root with:
+Create `.env.local` with `ANTHROPIC_API_KEY=your_key_here` (get one at [console.anthropic.com](https://console.anthropic.com/settings/keys)). Only the plain-words and PO-lookup paths need it.
 
-```
-ANTHROPIC_API_KEY=your_key_here
-```
+## What went wrong, and what we'd change
 
-`.env.local` is gitignored, so it does not come down with a clone. Each developer makes their own. Get a key at [console.anthropic.com](https://console.anthropic.com/settings/keys).
+The full log of calls I made is in [DECISIONS.md](DECISIONS.md). These are the ones that taught me the most.
+
+**1. Claude quietly "fixed" the buyer's typos.**
+`"2 wireless mise"` came back as a finished quote for Wireless Mouse with no sign the words had been changed, while `"2 wireless mice"` (correctly spelled) failed to match and only got a suggestion. Worse, the corrected input scored a higher `confidence` than the clean one, so confidence couldn't be trusted as the signal. I measured this rather than guessing, and proposed a `correctedFrom` field on each parsed item. **Still open.** Next we'd ship the soft version: still quote it, but mark the row "you typed 'mise'".
+
+**2. Orders were re-priced every time they loaded.**
+Placing an order saved only SKUs and quantities, and the Orders page priced them fresh on each visit, so the totals shown were never the totals the buyer agreed to. I merged orders and invoices: placing an order now prices once and saves a full invoice, and readers only display stored numbers. A placed order can even be pasted back into the reorder box by its PO number.
+
+**3. A fix for one bug hid another.**
+Forcing a stock failure from the demo dropdown also flagged every item already in the cart, because the cart re-checked every line on any change. I made it re-check only new, failed, or stale lines. That introduced a race: resetting the "force failure" flag was itself a dependency of the re-price function, so the reset triggered an unforced re-price that quietly overwrote the failure I was trying to show. The fix was to read the flag through a ref. The lesson was to re-test the original symptom after every fix.
+
+**4. "Reorder my last order" mixed two invoices.**
+I let Claude read the order history and choose products, and it once merged items from two invoices and lost track of where each came from. Now Claude only picks an invoice id, and plain code fetches that exact invoice. The trade-off is that this path always returns the whole invoice, so partial reorders need typed input.
+
+**5. A failed stock check didn't stop an order.**
+The row showed the error, but the button still worked, and the server only checked that each SKU existed. "Place order" now disables on any stock error, and `POST /api/orders` re-verifies stock fresh (uncached) before saving.
+
+### Known limits
+
+- No automated tests yet. Pricing, fuzzy matching, and the quote route are the first things we'd cover, then one end-to-end flow.
+- Trailing quantities in plain text (`"mouse 2"`) can be read as model numbers and dropped.
+- The cart lives in memory and is lost on refresh.
+- Data is JSON files with no locking, so two orders saved at the same instant could collide.
+- Admin can't place an order on behalf of a customer. It's saved under Admin's own account.
+- There is no product catalog to browse and no tiered/volume pricing, only account-based pricing and discounts.
