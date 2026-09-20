@@ -1,7 +1,7 @@
 // describe, it, and expect are the three tools Vitest gives us for writing tests.
 import { describe, expect, it } from "vitest";
 
-// The function we are testing. "@/" is a shortcut for the project's root folder.
+// The function we are testing. 
 import { findClosestMatches } from "@/lib/erp/fuzzyMatch";
 
 // describe groups related tests under one name, so the results are easy to read.
