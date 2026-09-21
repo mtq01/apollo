@@ -231,7 +231,7 @@ Format: a checkbox, a bold label, then plain text.
 - [ ] **TODO**: `styled-components` is a dependency used for exactly one thing, the dot spinner in `components/Loader.tsx`. Every other pixel in the app is Tailwind. Rewrite the spinner in Tailwind or plain CSS and drop the dependency.
 - [x] **TODO**: Delete confirmed dead files, zero importers found: `components/EmptyState.tsx`, `components/Spinner.tsx`, `components/activity-log/testData.ts`, `components/ui/select.tsx` (the app uses `native-select.tsx` instead), `components/ui/label.tsx`, and the `SelectAccount` component inside `components/account/AccountSelector.tsx` (only that file's other export, `accountList`, is actually used).
 - [x] **TODO**: `app/claudetest/page.tsx` posts to `/api/test`, which no longer exists, so the page 404s on every submit. It is still linked in the real left nav next to Reorder and Orders. Either wire it to a real route or pull it out of the nav.
-- [ ] **TODO**: `components/draft-order/DraftOrder.tsx` is 535 lines, the largest hand-written file in the app, doing five jobs at once: re-pricing, totals math, banners, table markup, and placing the order. Split it into a pricing hook plus a few presentational pieces next time it needs a real change.
+- [x] **TODO**: `components/draft-order/DraftOrder.tsx` is 535 lines, the largest hand-written file in the app, doing five jobs at once: re-pricing, totals math, banners, table markup, and placing the order. Split it into a pricing hook plus a few presentational pieces next time it needs a real change. Done Sept 20, see below.
 - [ ] **TODO**: `lib/erp/` originally meant "the fake ERP system" (`mockERP.ts`, `accountRules.ts`) but now also holds `invoice.ts`, `summarizeOrder.ts`, and `priceItems.ts`, which are our own order and pricing logic, not a simulation of an external system. Worth a deliberate split if the folder keeps growing.
 
 ## September 14, 2026 - Speed, demo buttons, and two account-aware fixes
@@ -278,3 +278,26 @@ Format: a checkbox, a bold label, then plain text.
 - [x] **TODO**: Confirmed Admin's "see any invoice" ability only covers the individual PO-number lookup (`lookUpInvoice`). `GET /api/orders` always filters by one `accountId`, regardless of role, so Admin cannot browse every account's orders as a list on the Orders page, only fetch one they already know the id for by typing it into the reorder box.
 - [x] **DECISION**: Fixed the gap above. `GET /api/orders` now returns every account's invoices when the requester is admin, instead of just their own. The Orders page only shows which account an order belongs to when more than one shows up in the list, so a normal buyer or manager's view looks exactly like it did before.
 - [x] **DECISION**: Added a "Accounts and roles" section to the README explaining buyer and manager are customers, admin is the supplier's own staff, and noting the assisted-ordering gap from the TODO above instead of building it.
+
+## September 20, 2026 - Splitting up the cart
+
+> `DraftOrder.tsx` had grown to about 680 lines and did everything. It is now 138 lines. Nothing about how the cart works was meant to change.
+
+- [x] **DECISION**: Split the cart by job. Each piece is small and has one reason to change.
+  - `useCartPricing.ts`: keeps prices fresh (the wait, the cancel, which lines to recheck).
+  - `usePlaceOrder.ts`: sends the order and shows the confirmation.
+  - `cartTotals.ts`: adds up subtotal, discount, tax, and total.
+  - `pricedRow.ts`: the priced row type plus small checks like `isStale`.
+  - `CartTable`, `CartLineRow`, `CartBanners`, `CartEmptyState`: draw the screen.
+  - `DraftOrder.tsx`: connects the pieces.
+- [x] **DECISION**: The pricing logic went into a hook, and the totals math went into a plain function. Neither needs a screen to run, so both can be tested without rendering the cart. Pricing is the part that caused the force-failure bug, so it matters most.
+- [x] **DECISION**: The date formatters moved to `lib/format.ts` so any page can use them.
+- [x] **DECISION**: Small cleanups while moving code. One `orPlaceholder` helper replaces five copies of "show the value, else a loading bar, else a dash". One `TotalRow` replaces five copy-pasted footer rows. The totals use one loop instead of four.
+- [x] **DECISION**: Renamed the hook inputs to `...Action` by mistake, and `DraftOrder` still used the old names. This crashed with "logEventAction is not a function". Fixed by reverting to plain names (`logEvent`, `clear`, `setErrorMessage`).
+- [x] **DECISION**: The `Action` name rule from Sept 15 only applies to a function prop on a component in a `"use client"` file. Hook inputs are not props, so they use plain names. Only `setForceFailureAction` on `DraftOrder` keeps the suffix.
+- [x] **DECISION**: Removed `"use client"` from the two hook files. They are only used by a client component, so they already run in the browser.
+- [ ] **TODO**: Not tested in the editor: that removing `"use client"` stops the naming warning. If the warning comes back, keep plain names and add a short comment.
+- [ ] **TODO**: The cart does not round its totals, but saved invoices in `summarizeOrder` round to the cent. The two could differ by 1 cent. Pick one rule.
+- [ ] **TODO**: The Orders page still does its own tax math. Move it to a shared function once the rounding rule is set.
+- [ ] **TODO**: Write tests for `useCartPricing` (with `renderHook`), `computeCartTotals`, and `isStale`.
+- [ ] **TODO**: `app/page.tsx` (about 460 lines) and `app/orders/page.tsx` (about 390 lines) still need the same split. The "Couldn't add these" list lives in `app/page.tsx`.
