@@ -7,5 +7,7 @@ export default defineConfig({
     // Fake browser, needed for hook and component tests.
     environment: "jsdom",
     setupFiles: ["./vitest.setup.ts"],
+    // tests/ holds the Playwright browser tests. Those run with `npx playwright test`, not Vitest.
+    exclude: ["**/node_modules/**", "tests/**"],
   },
 });

@@ -11,7 +11,7 @@ test('stock check fails, place order stays disabled', async ({ page }) => {
   const requestedUrls: string[] = [];
   page.on('request', (request) => requestedUrls.push(new URL(request.url()).pathname));
 
-  await page.goto('https://apollo-demo.gogogravity.com');
+  await page.goto('/');
 
   /* pick Alex. he's an admin, so he can always see stock, which means the stock check actually runs.
   (Mike is a buyer and only sees stock for his own warehouse, so for him the check might be skipped.)

@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test';
 
-// Checks that the live site loads and its browser tab title includes "Apollo"
+// Checks that the site loads and its browser tab title includes "Apollo"
 test('has title', async ({ page }) => {
-  await page.goto('https://apollo-demo.gogogravity.com');
+  await page.goto('/');
 
   // The full title is "Apollo | by Gravity". /Apollo/ passes as long as "Apollo" appears anywhere in it
   await expect(page).toHaveTitle(/Apollo/);
@@ -11,7 +11,7 @@ test('has title', async ({ page }) => {
 // Checks that "Add Products" starts disabled, turns on once there's text in the box, and can be clicked
 test('add products button', async ({ page }) => {
   // Open the reorder page
-  await page.goto('https://apollo-demo.gogogravity.com');
+  await page.goto('/');
 
   // Find the "Add Products" button by its role and visible text
   const addProducts = page.getByRole('button', { name: 'Add Products' });

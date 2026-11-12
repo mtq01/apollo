@@ -21,7 +21,7 @@ for (const account of accounts) {
     const requestedUrls: string[] = [];
     page.on('request', (request) => requestedUrls.push(new URL(request.url()).pathname));
 
-    await page.goto('https://apollo-demo.gogogravity.com');
+    await page.goto('/');
 
     /* pick the account. retry until it sticks, since clicks before React is ready get ignored.
     exact: true matches only the header button, not the sidebar one ("Mike Mike buyer · Calgary") */
