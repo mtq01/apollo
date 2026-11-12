@@ -20,8 +20,6 @@ Apollo fixes the front end:
 - Reordering from a **pasted list** or an **old order / invoice**.
 - **Honest failures.** Stale data is flagged, an unknown SKU gets close-match suggestions, and errors are explained in plain English.
 
-The idea came from Shae Inglis, owner and CEO of Acro Commerce (Kelowna). Early in the BCIT program, he was asked what he looks for in a junior developer, and his answer shaped this project. Credit Acro Commerce by name for anything taken from their write-up (for example, the Path to Production list).
-
 ## 2. What Apollo is NOT
 
 | Not this | Why |
@@ -154,8 +152,6 @@ Rules that come from this table:
 9. **Fuzzy-match threshold isn't tuned.** It's a reasonable default, not benchmarked.
 
 ## 11. What a real ERP integration would still need (Path to Production)
-
-Credit Acro Commerce for this list:
 
 - Real authentication
 - Rate limits
