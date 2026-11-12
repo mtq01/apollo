@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { MAX_ORDER_TEXT_LENGTH } from "@/lib/orderLimits";
 
 /* One row from either quote endpoint. Everything is optional because a row is
    one of three things: a priced match, an ERP miss (an error, no price), or a
@@ -335,6 +336,7 @@ export default function Reorder() {
             value={text}
             onChange={handleChange}
             onKeyDown={handleKeyDown}
+            maxLength={MAX_ORDER_TEXT_LENGTH}
           />
         </label>
 

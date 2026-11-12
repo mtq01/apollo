@@ -29,6 +29,7 @@ import {
 import { AlertTriangleIcon, CircleX, Loader2 } from "lucide-react";
 import type { ErrorType, ForcedFailure } from "@/types";
 import { TAX_RATE } from "@/lib/erp/summarizeOrder";
+import { MAX_QUANTITY } from "@/lib/orderLimits";
 
 /* A priced line from POST /api/quote/items, looked up by sku. Most fields are
    optional because a line can fail to price and still come back. */
@@ -503,11 +504,12 @@ export function DraftOrder({
                   ) : null}
                 </TableCell>
 
-                {/* Editable qty, min 1. */}
+                {/* Editable qty, 1 to MAX_QUANTITY (the provider clamps it too). */}
                 <TableCell>
                   <Input
                     type="number"
                     min={1}
+                    max={MAX_QUANTITY}
                     value={line.quantity}
                     onChange={(event) =>
                       setQuantity(line.sku, Number(event.target.value) || 1)

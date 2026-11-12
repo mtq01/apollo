@@ -116,6 +116,34 @@ describe("POST /api/orders: enough stock for the quantity (#2)", () => {
   });
 });
 
+describe("POST /api/orders: size limits (#6)", () => {
+  it("rejects a quantity over 10,000, before checking stock", async () => {
+    stockIs(50_000);
+    const { status, body } = await placeOrder(ALEX, [{ sku: MOUSE, quantity: 10_001 }]);
+
+    expect(status).toBe(400);
+    expect(body.error).toEqual({ type: "invalid input", message: "Quantity can be at most 10,000." });
+    expect(getERPStock).not.toHaveBeenCalled();
+  });
+
+  it("rejects more than 100 lines", async () => {
+    stockIs(50_000);
+    const lines = Array.from({ length: 101 }, () => ({ sku: MOUSE, quantity: 1 }));
+    const { status, body } = await placeOrder(ALEX, lines);
+
+    expect(status).toBe(400);
+    expect(body.error).toEqual({ type: "invalid input", message: "An order can have at most 100 lines." });
+  });
+
+  it("accepts 100 lines", async () => {
+    stockIs(50_000);
+    const lines = Array.from({ length: 100 }, () => ({ sku: MOUSE, quantity: 1 }));
+    const { status } = await placeOrder(ALEX, lines);
+
+    expect(status).toBe(200);
+  });
+});
+
 describe("POST /api/orders: stock is confirmed for every role (#3)", () => {
   it("checks stock with the ERP even when the buyer can't see it", async () => {
     stockIs(50);
