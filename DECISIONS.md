@@ -278,3 +278,22 @@ Format: a checkbox, a bold label, then plain text.
 - [x] **TODO**: Confirmed Admin's "see any invoice" ability only covers the individual PO-number lookup (`lookUpInvoice`). `GET /api/orders` always filters by one `accountId`, regardless of role, so Admin cannot browse every account's orders as a list on the Orders page, only fetch one they already know the id for by typing it into the reorder box.
 - [x] **DECISION**: Fixed the gap above. `GET /api/orders` now returns every account's invoices when the requester is admin, instead of just their own. The Orders page only shows which account an order belongs to when more than one shows up in the list, so a normal buyer or manager's view looks exactly like it did before.
 - [x] **DECISION**: Added a "Accounts and roles" section to the README explaining buyer and manager are customers, admin is the supplier's own staff, and noting the assisted-ordering gap from the TODO above instead of building it.
+
+## September 20, 2026 - Test tooling
+
+> The project had no automated tests. This sets up the tools and adds a first test to prove they work.
+
+- [x] **DECISION**: Picked Vitest as the test runner. It handles TypeScript and modern imports with almost no setup, and it runs fast.
+- [x] **DECISION**: Added `jsdom` and React Testing Library. `jsdom` fakes a browser so hooks and components can run in a test. They are not needed for the first test, but the cart hook tests will need them, and this saves a second setup PR.
+- [x] **DECISION**: Left out `@vitejs/plugin-react`. Installing it clashed with the Babel 7 version that `shadcn` brings in. Plain `.ts` tests do not need it.
+- [x] **DECISION**: Bumped `@types/node` from 20 to 22. We run Node 22, so the old types were out of date, and Vitest would not install with them.
+- [x] **DECISION**: The config file is `vitest.config.mts`, not `.ts`. Node read the `.ts` file as an older style and warned. The `.mts` name marks it as a modern module without changing how the rest of the project loads. Did not set `"type": "module"` in `package.json`, since that could break other config files.
+- [x] **DECISION**: Used Vite's built-in `resolve.tsconfigPaths` so `@/` imports work in tests, and removed the `vite-tsconfig-paths` plugin. The plugin was no longer needed.
+- [x] **DECISION**: Test files sit next to the code they test, like `fuzzyMatch.test.ts` beside `fuzzyMatch.ts`. End-to-end tests will get their own folder later.
+- [x] **DECISION**: The first test covers `findClosestMatches`. It is a plain function with no browser needed, and it already existed. Three checks: a typo finds the right product, letter case does not matter, and nonsense gets no suggestions. Also made one fail on purpose to confirm the runner really checks results.
+- [ ] **TODO**: `npm audit` shows 4 vulnerabilities (1 critical). None come from the test packages. They are in `next` 16.2.12 (with `postcss` and `sharp`) and `js-yaml`. Fix in a separate PR by bumping `next` and `eslint-config-next` to 16.3.5, then run `npm audit fix` for `js-yaml`.
+- [ ] **TODO**: Add `@vitejs/plugin-react` when we start testing `.tsx` components, if it is needed. It will need a version that works with `shadcn`'s Babel.
+- [ ] **TODO**: Make CI run `npm test`. This adds to the GitHub Action TODO from Aug 19.
+- [ ] **TODO**: Add an `.nvmrc` or `engines` field so everyone uses Node 22.
+- [ ] **TODO**: Write the next tests: `parseSkuList`, then the cart code (`computeCartTotals`, `isStale`, `useCartPricing`) once the cart refactor is merged, then one Cypress flow.
+
