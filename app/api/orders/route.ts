@@ -3,8 +3,10 @@ GET  lists an account's past orders. Each one is a stored invoice, so the
         route just reads them and hides fields the account may not see.
 
 POST places a new order: takes the draft's {sku, quantity} lines, checks
-        every sku is real, prices the whole order once, and saves it as a full
-        invoice in invoices.json. 
+        every sku is real, confirms there is enough stock for every line,
+        prices the whole order once, and saves it as a full invoice in
+        invoices.json. It returns the invoice with fields hidden by role,
+        the same way GET does.
 */
 import accounts from "@/data/accounts.json";
 import catalog from "@/data/catalog.json";
@@ -17,7 +19,8 @@ import {
   visibleInvoice,
 } from "@/lib/erp/invoice";
 import { summarizeOrder } from "@/lib/erp/summarizeOrder";
-import { getQuoteForProduct } from "@/lib/erp/productQuote";
+import { checkStock } from "@/lib/erp/productQuote";
+import { seeStock } from "@/lib/erp/accountRules";
 
 // Find the highest inv-<n> id we have and return the next one.
 function nextInvoiceId(existing: Invoice[]): string {
@@ -130,9 +133,10 @@ export async function POST(request: Request) {
   }
 
   // every line has to be a real catalog product
-  const unknown = items.filter(
-    (i) => !(catalog as Product[]).some((p) => p.sku === i.sku),
+  const productBySku = new Map(
+    (catalog as Product[]).map((product) => [product.sku, product]),
   );
+  const unknown = items.filter((item) => !productBySku.has(item.sku));
 
   if (unknown.length > 0) {
     return Response.json(
@@ -146,25 +150,63 @@ export async function POST(request: Request) {
     );
   }
 
-  // check stock for real right now, do not trust whatever the cart last showed. an order should never be placed on stock that was never confirmed, or that just failed to confirm.
+  /* The same sku can be on more than one line. Add those quantities up, so
+     stock is compared against everything this order asks for. */
+  const requestedBySku = new Map<string, { product: Product; requested: number }>();
+  for (const item of items) {
+    const product = productBySku.get(item.sku);
+    if (!product) continue; // unreachable: unknown skus were rejected above
+    const previous = requestedBySku.get(item.sku)?.requested ?? 0;
+    requestedBySku.set(item.sku, { product, requested: previous + item.quantity });
+  }
+
+  /* Check stock for real right now, uncached. Do not trust whatever the cart last showed.
+     This runs for every role: a buyer who is not allowed to SEE a stock number
+     still cannot order more than exists. */
   const stockChecks = await Promise.all(
-    items.map(async (item) => {
-      const product = (catalog as Product[]).find((p) => p.sku === item.sku)!;
-      const quote = await getQuoteForProduct({ account, product });
-      return { productName: product.name, stockError: quote.stockError };
-    }),
+    [...requestedBySku.values()].map(async ({ product, requested }) => ({
+      product,
+      requested,
+      check: await checkStock(product.sku),
+    })),
   );
 
-  const failedStockChecks = stockChecks.filter((check) => check.stockError);
+  const unconfirmed: string[] = [];
+  const notEnough: string[] = [];
+  let firstError: ErrorType | undefined;
 
-  if (failedStockChecks.length > 0) {
+  for (const { product, requested, check } of stockChecks) {
+    if (!check.ok) {
+      unconfirmed.push(product.name);
+      firstError ??= check.error;
+    } else if (check.stock < requested) {
+      // only show the real count to roles allowed to see stock for this product
+      notEnough.push(
+        seeStock({ account, product })
+          ? `${product.name} (${check.stock} available, ${requested} requested)`
+          : product.name,
+      );
+    }
+  }
+
+  if (firstError) {
     return Response.json(
       {
         error: {
-          type: failedStockChecks[0].stockError!.type,
-          message: `Stock could not be confirmed for: ${failedStockChecks
-            .map((check) => check.productName)
-            .join(", ")}`,
+          type: firstError.type,
+          message: `Stock could not be confirmed for: ${unconfirmed.join(", ")}`,
+        } satisfies ErrorType,
+      },
+      { status: 400 },
+    );
+  }
+
+  if (notEnough.length > 0) {
+    return Response.json(
+      {
+        error: {
+          type: "invalid input",
+          message: `Not enough stock for: ${notEnough.join(", ")}`,
         } satisfies ErrorType,
       },
       { status: 400 },
@@ -189,6 +231,8 @@ export async function POST(request: Request) {
 
   await saveInvoice(invoice);
 
-  // The client reads data.order.id, so return the invoice under "order".
-  return Response.json({ order: invoice });
+  /* The client reads data.order.id, so return the invoice under "order".
+     Run it through visibleInvoice first: the stored invoice holds internal cost
+     and discount, and a non-admin must never receive those, even unseen. */
+  return Response.json({ order: visibleInvoice({ account, invoice }) });
 }
