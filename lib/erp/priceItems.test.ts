@@ -3,8 +3,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { UserContext } from "@/types";
 
-// cacheTag only works inside a running Next.js server, and caching isn't what these tests check.
-vi.mock("next/cache", () => ({ cacheTag: vi.fn() }));
 // Fixed stock instead of the fake ERP's random delay and 15% timeout.
 vi.mock("@/lib/erp/mockERP", () => ({
   getERPStock: vi.fn(async () => ({ stock: 50, lastUpdated: new Date().toISOString() })),
@@ -29,6 +27,15 @@ function item(quantity: number | null) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+});
+
+describe("priceItems: every call checks stock (#4)", () => {
+  it("asks the ERP again on a second quote for the same product", async () => {
+    await priceItems(alex, [item(1)]);
+    await priceItems(alex, [item(1)]);
+
+    expect(getERPStock).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe("priceItems: quantities Claude got wrong (#5)", () => {

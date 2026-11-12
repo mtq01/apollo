@@ -10,7 +10,6 @@ import type {
 import accounts from "@/data/accounts.json";
 import { promises as fs } from "fs";
 import path from "path";
-import { revalidateTag } from "next/cache";
 
 import { randomUUID } from "crypto";
 
@@ -42,10 +41,6 @@ export async function saveInvoice(invoice: Invoice): Promise<Invoice> {
   const invoices = await getAllInvoices();
   invoices.push(invoice);
   await fs.writeFile(filePath, JSON.stringify(invoices, null, 2));
-
-  /* A new order was just saved, so any stock numbers cached under the "stock"
-     tag are out of date. Clear them so the next check looks up a fresh number. */
-  revalidateTag("stock", "max");
 
   return invoice;
 }

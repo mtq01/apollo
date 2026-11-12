@@ -1,9 +1,8 @@
-import { cacheTag } from "next/cache";
 import { getQuoteForProduct } from "@/lib/erp/productQuote";
 import { lookupProduct } from "@/lib/erp/productLookup";
 import { suggestAlternatives } from "@/lib/agent/suggestAlternatives";
 import { isValidQuantity, MAX_QUANTITY_LABEL } from "@/lib/orderLimits";
-import type { Product, UserContext, ErrorType, ForcedFailure } from "@/types";
+import type { UserContext, ErrorType, ForcedFailure } from "@/types";
 
 /* One line item to price. `sku` or `productName` may be null; the loop resolves
    whichever is present against the catalog. `rawText` is what we show the buyer
@@ -15,34 +14,17 @@ export type PriceableItem = {
   rawText: string;
 };
 
-async function getCachedQuote(
-  account: UserContext,
-  product: Product,
-  forceFailure?: ForcedFailure,
-) {
-  /*
-[Caching]
-    - What it does: do the call once, save the answer, and hand the saved
-      answer back if the same request comes in again.
-
-    - Why it's needed here: every quote runs an ERP stock call, ~300-1500ms.
-      Ask for the same product again with nothing changed and it does the
-      round trip again for the same answer.
-
-    - What's actually slow: only the stock lookup. mockERP.ts deliberately
-      waits. Price is instant maths, and lead time and warehouse are facts
-      already sitting in catalog.json. So the product is free; the quote
-      costs a round trip.
-*/
-
-  "use cache";
-  cacheTag("stock");
-  return getQuoteForProduct({ account, product }, forceFailure);
-}
-
 /* Resolves each item against the catalog and builds a priced quote row for it.
    Shared by the text path (/api/quote, after parseOrder) and the deterministic
-   path (/api/quote/items, where the SKU is already known). */
+   path (/api/quote/items, where the SKU is already known).
+
+   [No caching, on purpose]
+   Every call checks stock with the ERP. Quotes used to be cached with
+   "use cache", which handed back the same saved quote for the same account and
+   product: the stock number never refreshed, the activity log replayed old
+   "Stock Checked" lines for checks that never ran, and a saved failure stayed
+   failed. The cart already avoids repeat checks on its own (it only re-checks
+   new, failed or stale lines), and all items are checked in parallel. */
 export async function priceItems(
   account: UserContext,
   items: PriceableItem[],
@@ -97,7 +79,7 @@ export async function priceItems(
         `stockError` on the result instead (see DECISIONS.md, Aug 18). So the quote already carries whatever succeeded (price, 
         warehouse, etc.) plus the error for what didn't. */
 
-        const quote = await getCachedQuote(account, product, forceFailure); 
+        const quote = await getQuoteForProduct({ account, product }, forceFailure); 
 
         if (quote.stockError?.type === "not found") {
           // the catalog match succeeded; it's the ERP that couldn't confirm it.

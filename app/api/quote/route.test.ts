@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // No real Claude call: each test decides what the parser returns.
 vi.mock("@/lib/agent/parseOrder", () => ({ parseOrder: vi.fn() }));
-vi.mock("next/cache", () => ({ cacheTag: vi.fn() }));
 vi.mock("@/lib/erp/mockERP", () => ({
   getERPStock: vi.fn(async () => ({ stock: 50, lastUpdated: new Date().toISOString() })),
 }));
