@@ -15,6 +15,21 @@ type ERPStockResponse = {
   lastUpdated: string;
 };
 
+/* Why a stock check failed, as a code the rest of the app can branch on.
+   Callers check `error.code`, never the wording of `error.message`, so the
+   message can change without breaking anything. */
+export type ERPErrorCode = "timeout" | "not found";
+
+export class ERPError extends Error {
+  readonly code: ERPErrorCode;
+
+  constructor(code: ERPErrorCode, message: string) {
+    super(message);
+    this.name = "ERPError";
+    this.code = code;
+  }
+}
+
 
 /* sku identifies which product to check. It gets passed into hashSkuToStock() below so the same product 
 always returns the same stock count. forceFailure is optional: when passed, it skips the random logic entirely 
@@ -24,12 +39,10 @@ export async function getERPStock(sku: string, forceFailure?: ForcedFailure): Pr
   // If a specific failure was requested, throw it immediately and skip the random delay/logic below. Makes failures reliable for testing/demos.
   switch (forceFailure) {
     case "timeout":
-      // human readable error msg
-      throw new Error("ERP request timed out");
+      throw new ERPError("timeout", "ERP request timed out");
 
     case "not found":
-      // human readabl error msg
-      throw new Error("Product not found in ERP system.");
+      throw new ERPError("not found", "Product not found in ERP system.");
 
       case "stale stock": {
         // real stock count, refreshed 3hrs ago. shows 'confirm before ordering' reminder without a random wait
@@ -51,7 +64,7 @@ export async function getERPStock(sku: string, forceFailure?: ForcedFailure): Pr
 
   // 15% random chance of simulating a real (unforced) timeout.
   if (Math.random() < 0.15) {
-    throw new Error("ERP request timed out (15% chance of this happening)");
+    throw new ERPError("timeout", "ERP request timed out (15% chance of this happening)");
   }
 
   return {

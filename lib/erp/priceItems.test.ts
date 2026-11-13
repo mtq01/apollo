@@ -4,9 +4,23 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { UserContext } from "@/types";
 
 // Fixed stock instead of the fake ERP's random delay and 15% timeout.
-vi.mock("@/lib/erp/mockERP", () => ({
+vi.mock("@/lib/erp/mockERP", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/erp/mockERP")>()), // keeps the real ERPError class
   getERPStock: vi.fn(async () => ({ stock: 50, lastUpdated: new Date().toISOString() })),
 }));
+
+/* The real getQuoteForProduct, unless a test flips `quoteBlowsUp` to make it throw.
+   That's the only way to reach priceItems' "genuinely unexpected error" path. */
+const quoteBlowsUp = vi.hoisted(() => ({ value: false }));
+vi.mock("@/lib/erp/productQuote", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/lib/erp/productQuote")>();
+  return {
+    ...real,
+    getQuoteForProduct: vi.fn((...args: Parameters<typeof real.getQuoteForProduct>) =>
+      quoteBlowsUp.value ? Promise.reject(new Error("boom")) : real.getQuoteForProduct(...args),
+    ),
+  };
+});
 
 import { priceItems } from "@/lib/erp/priceItems";
 import { getERPStock } from "@/lib/erp/mockERP";
@@ -27,6 +41,22 @@ function item(quantity: number | null) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  quoteBlowsUp.value = false;
+});
+
+describe("priceItems: an unexpected pricing error (#10)", () => {
+  it("returns a failed row the cart can match to its line", async () => {
+    quoteBlowsUp.value = true;
+    const [row] = await priceItems(alex, [item(2)]);
+
+    expect(row).toEqual({
+      sku: "PER-2284", // the cart matches results to lines by sku; without it the row was dropped
+      name: "Wireless Mouse",
+      quantity: 2,
+      stock: "error",
+      stockError: { type: "request failed", message: "Something went wrong pricing this item." },
+    });
+  });
 });
 
 describe("priceItems: every call checks stock (#4)", () => {

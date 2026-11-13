@@ -110,11 +110,15 @@ export async function priceItems(
               : ("hidden" as const),
         };
       } catch {
-        // Only reached for a genuinely unexpected error, not a stock-check failure, that's already handled above via `quote.stockError`.
+        /* Only reached for a genuinely unexpected error, not a stock-check failure, that's already handled above via `quote.stockError`.
+           Same shape as any other failed line (stock "error" plus a stockError), and it keeps its sku: the cart
+           matches results to lines by sku, so a row without one is dropped and the line never shows it failed. */
         return {
+          sku: product.sku,
           name: product.name,
           quantity: item.quantity,
-          stock: {
+          stock: "error",
+          stockError: {
             type: "request failed",
             message: "Something went wrong pricing this item.",
           } satisfies ErrorType,
