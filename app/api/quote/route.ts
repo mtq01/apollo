@@ -4,11 +4,20 @@ import { parseOrder } from "@/lib/agent/parseOrder";
 import { lookUpInvoice } from "@/lib/erp/invoice";
 import { z } from "zod";
 import { priceItems } from "@/lib/erp/priceItems";
+import { MAX_ORDER_TEXT_LENGTH } from "@/lib/orderLimits";
 
 // Creating a zod schema to validate the user input. we need to do this because
 // it is coming from an outside source and typescript cannot validate it at runtime
 const userRequest = z.object({
-  text: z.string("text is required").trim().min(1, "text can't be empty."),
+  text: z
+    .string("text is required")
+    .trim()
+    .min(1, "text can't be empty.")
+    // this text goes to Claude, so an unlimited paste would be an unlimited bill
+    .max(
+      MAX_ORDER_TEXT_LENGTH,
+      `That's too long. Paste up to ${MAX_ORDER_TEXT_LENGTH.toLocaleString("en-US")} characters at a time.`,
+    ),
   accountId: z
     //.EXPECTED("ERROR MESSAGE")
     .number("The account id is not a number or null")

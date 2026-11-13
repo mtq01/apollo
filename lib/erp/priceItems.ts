@@ -2,6 +2,7 @@ import { cacheTag } from "next/cache";
 import { getQuoteForProduct } from "@/lib/erp/productQuote";
 import { lookupProduct } from "@/lib/erp/productLookup";
 import { suggestAlternatives } from "@/lib/agent/suggestAlternatives";
+import { isValidQuantity, MAX_QUANTITY_LABEL } from "@/lib/orderLimits";
 import type { Product, UserContext, ErrorType, ForcedFailure } from "@/types";
 
 /* One line item to price. `sku` or `productName` may be null; the loop resolves
@@ -53,6 +54,23 @@ export async function priceItems(
   - Promise.all keeps the result order lined up with `items`, same as the old for-loop did. */
   return Promise.all(
     items.map(async (item) => {
+      /* Claude can read a quantity we can't price: 0, -1, 2.5 ("2.5 boxes"), or a huge number.
+         Don't guess what the buyer meant, and don't let it into the cart, where it would fail
+         every re-price. Return it as a row the buyer can see and fix. (null is fine: it means
+         the buyer gave no quantity, and the page treats that as 1.) */
+      if (item.quantity !== null && !isValidQuantity(item.quantity)) {
+        return {
+          status: "unmatched",
+          rawText: item.rawText,
+          matchError: {
+            type: "invalid input",
+            message: `Couldn't use the quantity ${item.quantity}. Enter a whole number from 1 to ${MAX_QUANTITY_LABEL}.`,
+          } satisfies ErrorType,
+          suggestions: [],
+          quantity: null,
+        };
+      }
+
       const product = lookupProduct({
         sku: item.sku,
         productName: item.productName,

@@ -32,6 +32,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { TAX_RATE } from "@/lib/erp/summarizeOrder";
+import { clampQuantity, MAX_QUANTITY } from "@/lib/orderLimits";
 
 // One line of a past order, priced by GET /api/orders. productName and price
 // are null when the sku has left the catalog.
@@ -307,15 +308,13 @@ function OrderCard({
                   <Input
                     type="number"
                     min={1}
+                    max={MAX_QUANTITY}
                     value={quantities[item.sku]}
                     disabled={!available}
                     onChange={(event) =>
                       setQuantities((current) => ({
                         ...current,
-                        [item.sku]: Math.max(
-                          1,
-                          Math.floor(Number(event.target.value) || 1),
-                        ),
+                        [item.sku]: clampQuantity(Number(event.target.value) || 1),
                       }))
                     }
                     className="w-20"

@@ -9,6 +9,7 @@ import { useCallback, useContext, useState } from "react";
 import { AccountContext } from "@/components/account/AccountContext";
 import { ActivityContext } from "@/components/activity-log/ActivityContext";
 import { useResetOnAccountSwitch } from "@/hooks/use-reset-on-account-switch";
+import { clampQuantity, MAX_QUANTITY, MAX_QUANTITY_LABEL } from "@/lib/orderLimits";
 import { DraftLine, DraftOrderContext } from "./DraftOrderContext";
 
 // "1 item" or "3 items"
@@ -41,6 +42,19 @@ export function DraftOrderProvider({ children }: { children: React.ReactNode }) 
         logEvent(`Added ${itemCount(incoming.length)} to the cart`, "order");
       }
 
+      /* Merging onto an existing line can go over the per-line max. Say so in the log,
+         instead of capping it silently. (Checked here, not inside setLines below,
+         because React may run that updater twice.) */
+      for (const line of incoming) {
+        const existing = lines.find((current) => current.sku === line.sku);
+        if (existing && existing.quantity + line.quantity > MAX_QUANTITY) {
+          logEvent(
+            `${line.productName} capped at ${MAX_QUANTITY_LABEL}, the most one line can hold`,
+            "order",
+          );
+        }
+      }
+
       setLines((current) => {
         const updatedLines = [...current];
         for (const line of incoming) {
@@ -48,28 +62,28 @@ export function DraftOrderProvider({ children }: { children: React.ReactNode }) 
             (existing) => existing.sku === line.sku,
           );
           if (existingIndex === -1) {
-            updatedLines.push(line);
+            updatedLines.push({ ...line, quantity: clampQuantity(line.quantity) });
           } else {
             updatedLines[existingIndex] = {
               ...updatedLines[existingIndex],
-              quantity: updatedLines[existingIndex].quantity + line.quantity,
+              quantity: clampQuantity(
+                updatedLines[existingIndex].quantity + line.quantity,
+              ),
             };
           }
         }
         return updatedLines;
       });
     },
-    [logEvent],
+    [lines, logEvent],
   );
 
-  // Set one line's quantity. Never below 1, always a whole number. Not logged,
+  // Set one line's quantity: a whole number from 1 to MAX_QUANTITY. Not logged,
   // because typing a number fires this on every keystroke.
   const setQuantity = useCallback((sku: string, quantity: number) => {
     setLines((current) =>
       current.map((line) =>
-        line.sku === sku
-          ? { ...line, quantity: Math.max(1, Math.floor(quantity)) }
-          : line,
+        line.sku === sku ? { ...line, quantity: clampQuantity(quantity) } : line,
       ),
     );
   }, []);

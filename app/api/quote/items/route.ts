@@ -6,6 +6,7 @@ import accounts from "@/data/accounts.json";
 import type { UserContext, ErrorType } from "@/types";
 import { z } from "zod";
 import { priceItems } from "@/lib/erp/priceItems";
+import { MAX_LINE_ITEMS, MAX_QUANTITY, MAX_QUANTITY_LABEL } from "@/lib/orderLimits";
 
 // The request body comes from the browser, so we cannot trust its shape.
 // This schema checks it before we use it.
@@ -21,10 +22,12 @@ const itemsRequest = z.object({
         quantity: z
           .number()
           .int()
-          .positive("Quantity must be a positive whole number."),
+          .positive("Quantity must be a positive whole number.")
+          .max(MAX_QUANTITY, `Quantity can be at most ${MAX_QUANTITY_LABEL}.`),
       }),
     )
-    .min(1, "Add at least one item."),
+    .min(1, "Add at least one item.")
+    .max(MAX_LINE_ITEMS, `Add at most ${MAX_LINE_ITEMS} items at a time.`),
   // only sent from the demo dropdown; forces the ERP call to fail
   forceFailure: z.enum(["timeout", "not found", "stale stock"]).optional(),
 });

@@ -126,6 +126,9 @@ How to use this file:
 | 2026-11-12 | Seeing stock and confirming stock are separate. `seeStock` only decides whether a number is shown. `POST /api/orders` always checks stock through `checkStock()`, for every role. | A buyer who couldn't see a product's stock could place an order with no stock check at all. |
 | 2026-11-12 | An order is rejected when any sku's total quantity across lines is more than its stock. The message shows the available count only to roles allowed to see it. | Orders only checked that the stock call succeeded, never that there was enough. |
 | 2026-11-12 | `POST /api/orders` returns `visibleInvoice()`, not the stored invoice. | It was sending internal cost and discount to every role. |
+| 2026-11-12 | Request limits live in one file, `lib/orderLimits.ts`: pasted text up to 5,000 characters, up to 100 lines per request, and quantities from 1 to 10,000. All three routes, the paste box and both quantity inputs use it. | Pasted text goes to Claude, so an unlimited paste was an unlimited bill. One shared file keeps the client and server agreeing. |
+| 2026-11-12 | A quantity from Claude that can't be priced (0, negative, a decimal like "2.5 boxes", or over 10,000) becomes an unmatched row with an `"invalid input"` error and no suggestions. It isn't rounded or guessed. | It used to go into the cart and fail every re-price for the whole cart. This extends `status: "unmatched"` (2026-08-26) beyond catalog misses. |
+| 2026-11-12 | The cart clamps quantities to 1–10,000, including when merging two lines for the same sku, and logs when a merge hits the cap. | The same failure: one out-of-range line broke the whole cart's re-price. |
 
 ## Open TODOs
 

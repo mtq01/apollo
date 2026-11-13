@@ -21,6 +21,7 @@ import {
 import { summarizeOrder } from "@/lib/erp/summarizeOrder";
 import { checkStock } from "@/lib/erp/productQuote";
 import { seeStock } from "@/lib/erp/accountRules";
+import { MAX_LINE_ITEMS, MAX_QUANTITY, MAX_QUANTITY_LABEL } from "@/lib/orderLimits";
 
 // Find the highest inv-<n> id we have and return the next one.
 function nextInvoiceId(existing: Invoice[]): string {
@@ -90,10 +91,12 @@ const orderRequest = z.object({
         quantity: z
           .number()
           .int()
-          .positive("Quantity must be a positive whole number."),
+          .positive("Quantity must be a positive whole number.")
+          .max(MAX_QUANTITY, `Quantity can be at most ${MAX_QUANTITY_LABEL}.`),
       }),
     )
-    .min(1, "Add at least one item before placing the order."),
+    .min(1, "Add at least one item before placing the order.")
+    .max(MAX_LINE_ITEMS, `An order can have at most ${MAX_LINE_ITEMS} lines.`),
 });
 
 export async function POST(request: Request) {
