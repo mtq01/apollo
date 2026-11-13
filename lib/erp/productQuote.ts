@@ -52,38 +52,6 @@ export async function checkStock(
   return { ok: false, error: mapStockErrorToReason(lastError) };
 }
 
-/* The result of asking the ERP how much stock a product has. Either the count and
-   when it was checked, or the reason every attempt failed. */
-export type StockCheck =
-  | { ok: true; stock: number; lastUpdated: string }
-  | { ok: false; error: ErrorType };
-
-/* Asks the ERP for a product's stock: 1 try & 1 retry. Never throws.
-   - This does not look at roles. Whether an account may SEE the number is a
-     separate question (seeStock). Placing an order always needs the real number,
-     even when the buyer is not allowed to see it.
-   - onFailedAttempt lets the caller log each failed try, so a retry is never silent. */
-export async function checkStock(
-  sku: string,
-  forceFailure?: ForcedFailure,
-  onFailedAttempt?: (attempt: number) => void,
-): Promise<StockCheck> {
-  const maxAttempts = 2;
-  let lastError: unknown = undefined;
-
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      const stockResponse = await getERPStock(sku, forceFailure);   // throws immediately if forceFailure was passed
-      return { ok: true, stock: stockResponse.stock, lastUpdated: stockResponse.lastUpdated };
-    } catch (err) {
-      lastError = err;                                              // save it and let the loop try again
-      onFailedAttempt?.(attempt);
-    }
-  }
-
-  return { ok: false, error: mapStockErrorToReason(lastError) };
-}
-
 // Builds a full quote for one account + product. forceFailure optionally triggers a specific ERP error for testing.
 export async function getQuoteForProduct({ account, product}: AccountProductParams, forceFailure?: ForcedFailure): Promise<QuoteResult> {
 
