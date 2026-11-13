@@ -12,6 +12,7 @@ vi.mock("@/lib/erp/mockERP", async (importOriginal) => ({
 
 import { POST } from "@/app/api/quote/route";
 import { parseOrder } from "@/lib/agent/parseOrder";
+import { getERPStock } from "@/lib/erp/mockERP";
 
 async function quote(text: string) {
   const response = await POST(
@@ -114,5 +115,37 @@ describe("POST /api/quote: a bad quantity from Claude (#5)", () => {
       status: "unmatched",
       matchError: { type: "invalid input" },
     });
+  });
+});
+
+describe("POST /api/quote: demo forceFailure flag (#9)", () => {
+  async function quoteWithForcedTimeout() {
+    vi.mocked(parseOrder).mockResolvedValue({
+      type: "products",
+      products: [{ ...parsedProduct(1), rawText: "PER-2284", sku: "PER-2284" }],
+      summary: { totalItems: 1, needsReview: 0 },
+    });
+    const response = await POST(
+      new Request("http://localhost/api/quote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: "PER-2284", accountId: 1, forceFailure: "timeout" }),
+      }),
+    );
+    return response.status;
+  }
+
+  it("ignores forceFailure when the flag is not set", async () => {
+    vi.stubEnv("NEXT_PUBLIC_ENABLE_DEMO_FAILURES", "");
+
+    expect(await quoteWithForcedTimeout()).toBe(200);
+    expect(getERPStock).toHaveBeenCalledWith("PER-2284", undefined);
+  });
+
+  it("passes forceFailure to the ERP when the flag is 'true'", async () => {
+    vi.stubEnv("NEXT_PUBLIC_ENABLE_DEMO_FAILURES", "true");
+
+    expect(await quoteWithForcedTimeout()).toBe(200);
+    expect(getERPStock).toHaveBeenCalledWith("PER-2284", "timeout");
   });
 });

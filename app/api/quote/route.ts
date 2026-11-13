@@ -6,6 +6,7 @@ import { z } from "zod";
 import { priceItems } from "@/lib/erp/priceItems";
 import { MAX_ORDER_TEXT_LENGTH } from "@/lib/orderLimits";
 import { hasAnthropicKey } from "@/lib/env";
+import { allowedForceFailure } from "@/lib/demoFailures";
 
 // Creating a zod schema to validate the user input. we need to do this because
 // it is coming from an outside source and typescript cannot validate it at runtime
@@ -24,7 +25,8 @@ const userRequest = z.object({
     .number("The account id is not a number or null")
     .int("The account id must be a whole number")
     .positive("the account id must be a positive number"),
-  // the value must be exactly one of these strings, nothing else. z.enum() is for strings only
+  // the value must be exactly one of these strings, nothing else. z.enum() is for strings only.
+  // Still accepted when the demo flag is off, but ignored (see allowedForceFailure below).
   forceFailure: z.enum(["timeout", "not found", "stale stock"]).optional(),
   //These error messages are for us, the User will just receive a generic  "Please log in" message.
 });
@@ -73,7 +75,9 @@ export async function POST(request: Request) {
     );
   }
 
-  const { text, accountId, forceFailure } = validated.data;
+  const { text, accountId } = validated.data;
+  // the demo failure only reaches the ERP when NEXT_PUBLIC_ENABLE_DEMO_FAILURES is "true"
+  const forceFailure = allowedForceFailure(validated.data.forceFailure);
   const account = (accounts as UserContext[]).find((a) => a.id === accountId);
   // If the account is not found, return a 400 error with a message
   if (!account) {

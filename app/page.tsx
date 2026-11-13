@@ -27,6 +27,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { MAX_ORDER_TEXT_LENGTH } from "@/lib/orderLimits";
+import { demoFailuresEnabled } from "@/lib/demoFailures";
 
 /* One row from either quote endpoint. Everything is optional because a row is
    one of three things: a priced match, an ERP miss (an error, no price), or a
@@ -125,6 +126,14 @@ const QUICK_ACTIONS: {
       "2 wireless mice, a mechanical keyboard, and a usb-c hub",
   },
 ];
+
+/* The demo failure controls (the dropdown and the "Simulate a stock delay"
+   button) only show when NEXT_PUBLIC_ENABLE_DEMO_FAILURES is "true". The quote
+   routes ignore forceFailure otherwise, so hiding them keeps the page honest. */
+const SHOW_DEMO_FAILURES = demoFailuresEnabled();
+const VISIBLE_QUICK_ACTIONS = SHOW_DEMO_FAILURES
+  ? QUICK_ACTIONS
+  : QUICK_ACTIONS.filter((action) => !action.forceFailure);
 
 export default function Reorder() {
   const { accountId } = useContext(AccountContext);
@@ -300,7 +309,7 @@ export default function Reorder() {
       {/* Quick actions: fill the box, don't submit it. */}
       <div className="mb-4 flex flex-col gap-2">
         <div className="flex flex-wrap gap-2">
-          {QUICK_ACTIONS.map((action) => (
+          {VISIBLE_QUICK_ACTIONS.map((action) => (
             <Button
               key={action.label}
               type="button"
@@ -350,23 +359,25 @@ export default function Reorder() {
       </form>
 
       {/* Demo dropdown: force the next ERP call to time out or 404. */}
-      <NativeSelect
-        value={forceFailure ?? ""}
-        onChange={(event) =>
-          setForceFailure((event.target.value || null) as ForcedFailure | null)
-        }
-      >
-        <NativeSelectOption value="">Select Force Failure</NativeSelectOption>
-        <NativeSelectOption value="timeout">
-          {"Force 'Timeout'"}
-        </NativeSelectOption>
-        <NativeSelectOption value="not found">
-          {"Force 'Not Found'"}
-        </NativeSelectOption>
-        <NativeSelectOption value="stale stock">
-          {"Force 'Stale Stock'"}
-        </NativeSelectOption>
-      </NativeSelect>
+      {SHOW_DEMO_FAILURES && (
+        <NativeSelect
+          value={forceFailure ?? ""}
+          onChange={(event) =>
+            setForceFailure((event.target.value || null) as ForcedFailure | null)
+          }
+        >
+          <NativeSelectOption value="">Select Force Failure</NativeSelectOption>
+          <NativeSelectOption value="timeout">
+            {"Force 'Timeout'"}
+          </NativeSelectOption>
+          <NativeSelectOption value="not found">
+            {"Force 'Not Found'"}
+          </NativeSelectOption>
+          <NativeSelectOption value="stale stock">
+            {"Force 'Stale Stock'"}
+          </NativeSelectOption>
+        </NativeSelect>
+      )}
 
       {error && <ErrorMessage error={error} />}
 

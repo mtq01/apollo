@@ -178,6 +178,7 @@ How to use this file:
 | 2026-09-15 | Seeded 3 more invoices, so every demo account has at least 3 (1 to 8 items) and one (account 3) covers every product. | Better demos. |
 | 2026-09-15 | `refreshPrices` reads `forceFailure` through a ref instead of depending on it. | Resetting it triggered an unforced re-price that quietly overwrote the failure being shown. |
 | 2026-09-15 | Renamed the `setForceFailure` prop to `setForceFailureAction`. | With `cacheComponents` on, Next requires function props on a `"use client"` component to be named `action` or end in `Action`. |
+| 2026-11-13 | The demo failure controls are off unless `NEXT_PUBLIC_ENABLE_DEMO_FAILURES=true`. Without it, both quote routes still accept `forceFailure` but ignore it (`allowedForceFailure` in `lib/demoFailures.ts`), and the page hides the dropdown and the "Simulate a stock delay" button. Playwright turns it on for its dev server. | Any caller could force a failure on the live demo. One `NEXT_PUBLIC_` variable keeps the server and the page in agreement; it's inlined at build time. Accepting and ignoring the field means old clients don't get a 400. Closes the 2026-08-19 TODO. |
 
 ### Tooling, tests & CI
 
@@ -256,12 +257,6 @@ How to use this file:
 | Date | TODO | Reason |
 | --- | --- | --- |
 | 2026-08-06 | Add a filter by event category to the activity log UI. | Events carry a `category` since 2026-08-18, but the log shows everything at once. Filtering by errors, orders or stock checks helps debugging and demos. |
-
-### Demo tooling
-
-| Date | TODO | Reason |
-| --- | --- | --- |
-| 2026-08-19 | Move `forceFailure` off the public request schemas, behind a dev-only path or an env check. | Any caller can force a failure, including on the live demo. |
 
 ### Tooling, tests & CI
 
