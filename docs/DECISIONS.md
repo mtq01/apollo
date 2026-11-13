@@ -118,6 +118,12 @@ How to use this file:
 | 2026-09-15 | A cart line with no priced result yet shows a pulsing placeholder. | "—" means hidden data, so an in-progress row looked finished. |
 | 2026-09-15 | A purple "Updating cart..." banner shows while a lookup runs, even when the cart has items. | The spinner only showed on an empty cart. |
 | 2026-11-12 | The cart clamps quantities to 1–10,000, including when merging two lines for the same sku, and logs when a merge hits the cap. | The same failure: one out-of-range line broke the whole cart's re-price. |
+| 2026-09-20 | Split `DraftOrder.tsx` (about 680 lines) by job: `useCartPricing.ts` keeps prices fresh, `usePlaceOrder.ts` sends the order, `cartTotals.ts` adds up the totals, `pricedRow.ts` holds the row type and checks like `isStale`, and `CartTable`, `CartLineRow`, `CartBanners` and `CartEmptyState` draw the screen. `DraftOrder.tsx` (138 lines) connects them. Replaces the 2026-09-04 TODO. | It did five jobs at once. Each piece now has one reason to change. Nothing about how the cart works was meant to change. |
+| 2026-09-20 | Pricing went into a hook, and the totals math into a plain function. | Neither needs a screen to run, so both can be tested without rendering the cart. Pricing caused the force-failure bug, so it matters most. |
+| 2026-09-20 | The date formatters moved to `lib/format.ts`. | Any page can use them. |
+| 2026-09-20 | One `orPlaceholder` helper replaces five copies of "value, else a loading bar, else a dash". One `TotalRow` replaces five footer rows, and the totals use one loop instead of four. | Small cleanups while moving the code. |
+| 2026-09-20 | Hook inputs use plain names (`logEvent`, `clear`, `setErrorMessage`), not `...Action`. Only `setForceFailureAction` on `DraftOrder` keeps the suffix. | The 2026-09-15 `Action` rule only covers function props on a `"use client"` component. Renaming hook inputs crashed with "logEventAction is not a function". |
+| 2026-09-20 | Removed `"use client"` from the two hook files. | They are only used by a client component, so they already run in the browser. |
 
 ### Orders & invoices
 
@@ -233,7 +239,10 @@ How to use this file:
 | --- | --- | --- |
 | 2026-09-02 | Persist the cart with `localStorage` or a server cart. | The cart is lost on refresh. |
 | 2026-09-02 | Warn when a PO or stored invoice has a sku that has left the catalog. | The line is added to the cart but won't price, with no warning. |
-| 2026-09-04 | Split `components/draft-order/DraftOrder.tsx` into a pricing hook plus a few presentational pieces. | Over 500 lines doing five jobs: re-pricing, totals, banners, table markup and placing the order. |
+| 2026-09-20 | The cart does not round its totals, but `summarizeOrder` rounds saved invoices to the cent. Pick one rule. | The two could differ by 1 cent. |
+| 2026-09-20 | The Orders page still does its own tax math. Move it to a shared function once the rounding rule is set. | Two copies of the same math can drift. |
+| 2026-09-20 | Split `app/page.tsx` (about 460 lines, including the "Couldn't add these" list) and `app/orders/page.tsx` (about 390 lines) the same way as the cart. | Same problem `DraftOrder.tsx` had. |
+| 2026-09-20 | Not checked in the editor: that removing `"use client"` from the hooks stops the `Action` naming warning. If it comes back, keep the plain names and add a short comment. | |
 | 2026-09-15 | The cart keeps a cached price per sku until something forces a recheck (a new item, a past failure, stale stock, an account switch). | A real catalog price change would go unnoticed until then. |
 
 ### Orders & invoices
@@ -260,7 +269,7 @@ How to use this file:
 | --- | --- | --- |
 | 2026-09-20 | `npm audit` shows 4 vulnerabilities (1 critical) in `next` 16.2.12 (with `postcss` and `sharp`) and `js-yaml`. Bump `next` and `eslint-config-next` to 16.3.5, then run `npm audit fix`. | None come from the test packages. |
 | 2026-09-20 | Add an `.nvmrc` or an `engines` field so everyone uses Node 22, and switch CI from Node 20 to 22 to match. | The team runs Node 22, but CI and the README say Node 20. |
-| 2026-09-20 | Write the next tests: `parseSkuList`, then the cart code (`computeCartTotals`, `isStale`, `useCartPricing`) once the cart refactor is merged, then more end-to-end flows. | Playwright is set up since 2026-11-11. |
+| 2026-09-20 | Write the next tests: `parseSkuList`, then the cart code (`computeCartTotals`, `isStale`, `useCartPricing` with `renderHook`), then more end-to-end flows. | Playwright is set up since 2026-11-11. |
 
 ### Cleanup
 
