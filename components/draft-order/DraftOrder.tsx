@@ -380,7 +380,7 @@ export function DraftOrder({
         {placedOrderId ? (
           <>
             <h2 className="mb-2 text-lg font-semibold">Your Cart</h2>
-            <p className="text-sm text-green-700">
+            <p role="status" className="text-sm text-green-700">
               Order {placedOrderId} placed.
             </p>
           </>
@@ -425,9 +425,11 @@ export function DraftOrder({
 
       {/* Purple while the buyer's last submit is still being looked up, then
           the red stock-failure banner, then the stale-data reminder.
-          Kept generic, the row and the log below both have the real reason. */}
+          Kept generic, the row and the log below both have the real reason.
+          Screen readers: the red one stays an alert (it blocks the order); the
+          other two are role="status", read out politely without interrupting. */}
       {isLoading ? (
-        <Alert className="my-3 border-purple-300 bg-purple-100 text-black">
+        <Alert role="status" className="my-3 border-purple-300 bg-purple-100 text-black">
           <Loader2 className="animate-spin" />
           <AlertDescription>Updating cart...</AlertDescription>
         </Alert>
@@ -440,7 +442,7 @@ export function DraftOrder({
           </AlertDescription>
         </Alert>
       ) : hasStaleStock ? (
-        <Alert className="my-3 border-amber-300 bg-orange-100 text-black">
+        <Alert role="status" className="my-3 border-amber-300 bg-orange-100 text-black">
           <AlertTriangleIcon />
           <AlertDescription>
             Stock data may be a few hours old, please <strong>call</strong> to
@@ -648,7 +650,7 @@ export function DraftOrder({
       </Table>
 
       {errorMessage && (
-        <p className="mt-2 text-sm text-red-700">{errorMessage}</p>
+        <p role="alert" className="mt-2 text-sm text-red-700">{errorMessage}</p>
       )}
 
       {/* can't place an order while a line's stock could not be confirmed. */}
