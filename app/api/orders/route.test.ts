@@ -6,7 +6,10 @@ import type { Invoice } from "@/types";
 
 /* Replace the fake ERP so each test decides the stock count (or a failure) itself,
    instead of the random delay and 15% timeout. */
-vi.mock("@/lib/erp/mockERP", () => ({ getERPStock: vi.fn() }));
+vi.mock("@/lib/erp/mockERP", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/erp/mockERP")>()), // keeps the real ERPError class
+  getERPStock: vi.fn(),
+}));
 
 /* Replace only the file reads and writes on invoices.json. visibleInvoice stays real,
    because hiding fields by role is part of what these tests check. */
@@ -17,7 +20,7 @@ vi.mock("@/lib/erp/invoice", async (importOriginal) => ({
 }));
 
 import { POST } from "@/app/api/orders/route";
-import { getERPStock } from "@/lib/erp/mockERP";
+import { ERPError, getERPStock } from "@/lib/erp/mockERP";
 import { saveInvoice } from "@/lib/erp/invoice";
 
 // Demo accounts (data/accounts.json)
@@ -154,7 +157,7 @@ describe("POST /api/orders: stock is confirmed for every role (#3)", () => {
   });
 
   it("rejects a buyer's order when that check fails, after one retry", async () => {
-    vi.mocked(getERPStock).mockRejectedValue(new Error("ERP request timed out"));
+    vi.mocked(getERPStock).mockRejectedValue(new ERPError("timeout", "ERP request timed out"));
     const { status, body } = await placeOrder(MIKE, [{ sku: MOUSE, quantity: 2 }]);
 
     expect(status).toBe(400);

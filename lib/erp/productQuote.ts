@@ -5,20 +5,19 @@ import {
   seeStock,
   accessWarehouse,
 } from "./accountRules";
-import { getERPStock } from "./mockERP";
+import { ERPError, getERPStock } from "./mockERP";
 import { randomUUID } from "crypto";
 
 // +++++ This file combines the 3 functions created in Week 1: 'accountRules.ts' +++++
 
-// maps whatever getERPStock throws into our ErrorType shape
-function mapStockErrorToReason(err: unknown): ErrorType {
+/* Maps whatever getERPStock throws into our ErrorType shape, by the error's code,
+   never by its wording. Anything that isn't an ERPError is something we didn't
+   expect, so it's a "request failed", not the buyer's fault. */
+export function mapStockErrorToReason(err: unknown): ErrorType {
+  if (err instanceof ERPError) return { type: err.code, message: err.message };
+
   const message = err instanceof Error ? err.message : "Unknown stock check error";
-
-  if (message.includes("timed out")) return { type: "timeout", message };
-  if (message.includes("not found")) return { type: "not found", message };
-
-  // mockERP doesn't currently throw "restricted" or "invalid input" for stock checks, this is a fallback in case that changes later.
-  return { type: "invalid input", message };
+  return { type: "request failed", message };
 }
 
 /* The result of asking the ERP how much stock a product has. Either the count and

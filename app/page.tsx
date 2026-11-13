@@ -34,7 +34,7 @@ import { MAX_ORDER_TEXT_LENGTH } from "@/lib/orderLimits";
 type QuoteRow = {
   name?: string;
   quantity: number | null;
-  stock?: number | "hidden" | "error" | ErrorType;
+  stock?: number | "hidden" | "error";
   stockError?: ErrorType;
   sku?: string;
   price?: number;
