@@ -1,6 +1,6 @@
 # Retrospective
 
-What went wrong while building Apollo, and what we'd change. The full log of decisions is in [DECISIONS.md](../DECISIONS.md).
+What went wrong while building Apollo, and what we'd change. The full log of decisions is in [DECISIONS.md](DECISIONS.md).
 
 ## Why we built it
 

@@ -142,7 +142,7 @@ The goal: all ERP and data access goes through **one entry point**, so swapping 
 | `components/ErrorMessage.tsx`, `Loader.tsx` | Shared error banner and loading spinner |
 | `hooks/use-reset-on-account-switch.ts` | Clears cart, log and text box when the account changes |
 | `tests/` | Playwright specs. Unit tests sit next to the code (`*.test.ts`). |
-| `DECISIONS.md` | Dated log of decisions and open TODOs |
+| `docs/DECISIONS.md` | Dated log of decisions and open TODOs |
 
 ## 8. Who owns what (three tracks)
 
