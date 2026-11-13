@@ -39,7 +39,7 @@ How to use this file:
 | 2026-08-20 | Table rows are keyed by array index, not `sku`. | Not-found rows have no sku, so two of them collided on `key={undefined}`. |
 | 2026-08-20 | The activity log markup moved into the `DisplayActivity` component. | It was written on Day 4 and never used. |
 | 2026-08-20 | A demo dropdown on the reorder page sends an optional `forceFailure` (`"timeout"` or `"not found"`). | Both failures can be shown on demand instead of waiting for the random 15% timeout. |
-| 2026-08-20 | `forceFailure` is an argument to `getCachedQuote`, so it's part of the cache key. | Otherwise a cached success replays and the menu looks broken. |
+| 2026-08-20 | `forceFailure` is an argument to `getCachedQuote`, so it's part of the cache key. | Otherwise a cached success replays and the menu looks broken. Changed 2026-11-12: the quote cache was removed. |
 | 2026-08-20 | `null` is turned into `undefined` before `forceFailure` is sent. | `JSON.stringify` sends `null`, which fails the `z.enum` check. |
 | 2026-08-20 | The request body is checked with a Zod schema (`text`, `accountId`, optional `forceFailure`) using `safeParse`. | Replaces hand-written `if` checks. `safeParse` never throws, so it fits the guard-clause style. |
 | 2026-08-20 | Any `accountId` problem reports "Please log in". Text errors keep their specific messages. | Zod's wording never reaches a buyer, but "too long" and "empty" need different fixes. |
@@ -129,6 +129,7 @@ How to use this file:
 | 2026-11-12 | Request limits live in one file, `lib/orderLimits.ts`: pasted text up to 5,000 characters, up to 100 lines per request, and quantities from 1 to 10,000. All three routes, the paste box and both quantity inputs use it. | Pasted text goes to Claude, so an unlimited paste was an unlimited bill. One shared file keeps the client and server agreeing. |
 | 2026-11-12 | A quantity from Claude that can't be priced (0, negative, a decimal like "2.5 boxes", or over 10,000) becomes an unmatched row with an `"invalid input"` error and no suggestions. It isn't rounded or guessed. | It used to go into the cart and fail every re-price for the whole cart. This extends `status: "unmatched"` (2026-08-26) beyond catalog misses. |
 | 2026-11-12 | The cart clamps quantities to 1–10,000, including when merging two lines for the same sku, and logs when a merge hits the cap. | The same failure: one out-of-range line broke the whole cart's re-price. |
+| 2026-11-12 | Removed the quote cache (`"use cache"` and `cacheTag("stock")` in `priceItems.ts`, and `revalidateTag` in `saveInvoice`). Every quote checks stock with the ERP. | Confirmed in dev: three quotes for the same product returned the same `calculatedAt`. The stock number never refreshed, the log replayed "Stock Checked" lines for checks that never ran, and a saved failure would stay failed. The cart already only re-checks new, failed or stale lines, so the cache bought little. Replaces the 2026-08-20 cache-key decision for `forceFailure`. |
 
 ## Open TODOs
 

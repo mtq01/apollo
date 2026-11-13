@@ -2,7 +2,6 @@
 
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("next/cache", () => ({ cacheTag: vi.fn() }));
 vi.mock("@/lib/erp/mockERP", () => ({
   getERPStock: vi.fn(async () => ({ stock: 50, lastUpdated: new Date().toISOString() })),
 }));
