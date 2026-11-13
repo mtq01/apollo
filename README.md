@@ -128,6 +128,6 @@ Pasted text ──► only SKUs? ──yes──► priceItems ──► cart
 
 ## Credits
 
-Built by [Alex Monro](https://github.com/alex-monro), [Mahtab Salimzadeh](https://github.com/mahtabsz-devdes) and [Mike](https://github.com/mtq01) as a personal project.
+Built by [Alex](https://github.com/alex-monro), [Mahtab](https://github.com/mahtabsz-devdes) and [Mike](https://github.com/mtq01) as a personal project.
 
 The story behind the project and the lessons from building it are in [docs/RETROSPECTIVE.md](docs/RETROSPECTIVE.md).
