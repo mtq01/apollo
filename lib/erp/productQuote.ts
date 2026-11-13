@@ -1,4 +1,4 @@
-import type { AccountProductParams, ActivityEvent, ForcedFailure, ErrorType, ActivityCategory, LineItemResult, QuoteResult} from "../../types";
+import type { AccountProductParams, ActivityEvent, ForcedFailure, ErrorType, ActivityCategory, QuoteResult} from "../../types";
 import {
   calculatePrice,
   calculateLeadTime,
