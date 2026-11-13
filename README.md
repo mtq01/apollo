@@ -61,6 +61,8 @@ echo "ANTHROPIC_API_KEY=your_key_here" > .env.local
 npm run dev
 ```
 
+To show the demo failure controls (the "Force Failure" dropdown and the "Simulate a stock delay" button), add `NEXT_PUBLIC_ENABLE_DEMO_FAILURES=true` to `.env.local` and restart. They're off by default, and the quote APIs ignore `forceFailure` unless this is set. It's read at build time, so a hosted deploy needs a rebuild after changing it.
+
 Open [http://localhost:3000](http://localhost:3000).
 
 ### Scripts

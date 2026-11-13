@@ -180,7 +180,7 @@ Rules that come from this table:
 3. **No manager-approval workflow.** The only human check is the buyer confirming their own cart.
 4. **No real login.** The account picker stands in for authentication, and routes trust the `accountId` they're sent.
 5. **Flat account discount.** No volume-tier or negotiated pricing.
-6. **Simulated stock.** Stock counts are a hash of the SKU, not real counts. Delay (300–1500ms) and a 15% timeout chance are random; stale stock only happens when forced from the demo menu.
+6. **Simulated stock.** Stock counts are a hash of the SKU, not real counts. Delay (300–1500ms) and a 15% timeout chance are random; stale stock only happens when forced from the demo menu, which only exists when `NEXT_PUBLIC_ENABLE_DEMO_FAILURES=true`.
 7. **Prices are plain JS numbers.** Rounded to cents with `money()`, but a real system would use integer cents or a decimal type.
 8. **In-memory cart.** The cart is lost on refresh.
 9. **Silent typo correction.** Claude can turn a misspelled product into the real one with no sign on the row (`correctedFrom` is an open TODO).

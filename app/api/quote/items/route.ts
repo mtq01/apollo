@@ -6,6 +6,7 @@ import accounts from "@/data/accounts.json";
 import type { UserContext, ErrorType } from "@/types";
 import { z } from "zod";
 import { priceItems } from "@/lib/erp/priceItems";
+import { allowedForceFailure } from "@/lib/demoFailures";
 import { MAX_LINE_ITEMS, MAX_QUANTITY, MAX_QUANTITY_LABEL } from "@/lib/orderLimits";
 
 // The request body comes from the browser, so we cannot trust its shape.
@@ -28,7 +29,8 @@ const itemsRequest = z.object({
     )
     .min(1, "Add at least one item.")
     .max(MAX_LINE_ITEMS, `Add at most ${MAX_LINE_ITEMS} items at a time.`),
-  // only sent from the demo dropdown; forces the ERP call to fail
+  // only sent from the demo dropdown; forces the ERP call to fail. Ignored
+  // unless NEXT_PUBLIC_ENABLE_DEMO_FAILURES is "true".
   forceFailure: z.enum(["timeout", "not found", "stale stock"]).optional(),
 });
 
@@ -57,7 +59,8 @@ export async function POST(request: Request) {
     );
   }
 
-  const { accountId, items, forceFailure } = validated.data;
+  const { accountId, items } = validated.data;
+  const forceFailure = allowedForceFailure(validated.data.forceFailure);
 
   // The id has to match a real account.
   const account = (accounts as UserContext[]).find(

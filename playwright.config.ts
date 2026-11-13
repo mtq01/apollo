@@ -73,9 +73,12 @@ export default defineConfig({
 
   /* Start the app before the tests run.
     - On CI: a production build, the same way the live demo runs.
-    - Locally: the dev server. If one is already running on port 3000, the tests reuse it. */
+    - Locally: the dev server. If one is already running on port 3000, the tests reuse it,
+      so start it with NEXT_PUBLIC_ENABLE_DEMO_FAILURES=true or stock-check-failure.spec.ts fails.
+    The demo failure dropdown is on for tests; the specs use it to force a stock timeout. */
   webServer: {
     command: process.env.CI ? 'npm run build && npm run start' : 'npm run dev',
+    env: { NEXT_PUBLIC_ENABLE_DEMO_FAILURES: 'true' },
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
     // a cold production build can take a few minutes on CI
