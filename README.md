@@ -124,7 +124,7 @@ Pasted text ──► only SKUs? ──yes──► priceItems ──► cart
 
 - Branch from `staging` and open pull requests into `staging`. `main` is the released version.
 - Run `npm run lint` and `npm test` before opening a PR.
-- Record judgment calls and open TODOs in [DECISIONS.md](DECISIONS.md).
+- Record judgment calls and open TODOs in [DECISIONS.md](docs/DECISIONS.md).
 
 ## Credits
 

@@ -76,7 +76,7 @@ export async function priceItems(
 
       try {
         /* getQuoteForProduct no longer throws on a failed stock check, it always returns normally and reports the failure via 
-        `stockError` on the result instead (see DECISIONS.md, Aug 18). So the quote already carries whatever succeeded (price, 
+        `stockError` on the result instead (see docs/DECISIONS.md, Aug 18). So the quote already carries whatever succeeded (price, 
         warehouse, etc.) plus the error for what didn't. */
 
         const quote = await getQuoteForProduct({ account, product }, forceFailure); 
