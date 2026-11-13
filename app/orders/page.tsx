@@ -138,7 +138,7 @@ export default function OrdersPage() {
           Select an account to see your past orders.
         </p>
       ) : errorMessage ? (
-        <p className="text-sm text-red-700">{errorMessage}</p>
+        <p role="alert" className="text-sm text-red-700">{errorMessage}</p>
       ) : orders === null ? (
         <p className="text-sm text-gray-600">Loading…</p>
       ) : orders.length === 0 ? (
@@ -146,7 +146,7 @@ export default function OrdersPage() {
       ) : (
         <>
           {addedMessage && (
-            <p className="mb-6 text-sm text-green-700">
+            <p role="status" className="mb-6 text-sm text-green-700">
               {addedMessage}{" "}
               <Link href="/" className="underline hover:no-underline">
                 Go to Reorder
