@@ -1,4 +1,4 @@
-import type { AccountProductParams, ActivityEvent, ForcedFailure, ErrorType, ActivityCategory, LineItemResult, QuoteResult} from "../../types";
+import type { AccountProductParams, ActivityEvent, ForcedFailure, ErrorType, ActivityCategory, QuoteResult} from "../../types";
 import {
   calculatePrice,
   calculateLeadTime,
@@ -19,6 +19,38 @@ function mapStockErrorToReason(err: unknown): ErrorType {
 
   // mockERP doesn't currently throw "restricted" or "invalid input" for stock checks, this is a fallback in case that changes later.
   return { type: "invalid input", message };
+}
+
+/* The result of asking the ERP how much stock a product has. Either the count and
+   when it was checked, or the reason every attempt failed. */
+export type StockCheck =
+  | { ok: true; stock: number; lastUpdated: string }
+  | { ok: false; error: ErrorType };
+
+/* Asks the ERP for a product's stock: 1 try & 1 retry. Never throws.
+   - This does not look at roles. Whether an account may SEE the number is a
+     separate question (seeStock). Placing an order always needs the real number,
+     even when the buyer is not allowed to see it.
+   - onFailedAttempt lets the caller log each failed try, so a retry is never silent. */
+export async function checkStock(
+  sku: string,
+  forceFailure?: ForcedFailure,
+  onFailedAttempt?: (attempt: number) => void,
+): Promise<StockCheck> {
+  const maxAttempts = 2;
+  let lastError: unknown = undefined;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const stockResponse = await getERPStock(sku, forceFailure);   // throws immediately if forceFailure was passed
+      return { ok: true, stock: stockResponse.stock, lastUpdated: stockResponse.lastUpdated };
+    } catch (err) {
+      lastError = err;                                              // save it and let the loop try again
+      onFailedAttempt?.(attempt);
+    }
+  }
+
+  return { ok: false, error: mapStockErrorToReason(lastError) };
 }
 
 // Builds a full quote for one account + product. forceFailure optionally triggers a specific ERP error for testing.
@@ -57,38 +89,23 @@ export async function getQuoteForProduct({ account, product}: AccountProductPara
 
   // +++++ After a successful getERPStock() call, LOG the STOCK. +++++
   if (canSeeStock) {
+    const check = await checkStock(product.sku, forceFailure, (attempt) =>
+      addEvent(`Stock check attempt ${attempt} failed — ${product.name}`, "stock"),   // log the failed attempt so its not silent
+    );
 
-    // +++++ Retry up to 2 times before giving up +++++
-    const maxAttempts = 2;                                          // 1 try & 1 retry
-    let lastError: unknown = undefined;                             // holds the most recent failure in case we need to throw it later
-    let succeeded = false;                                          // flips to true once a stock check actually works
-
-    
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      // if checking stock fails, save the error and let the loop retry. nothing is thrown here, so events/price already gathered aren't lost
-      try {
-        const stockResponse = await getERPStock(product.sku, forceFailure);           // ask the fake ERP for stock (normally random), but throws immediately if forceFailure was passed.
-        stock = stockResponse.stock;                                                  // pull the number out of the response
-        stockLastUpdated = stockResponse.lastUpdated;                                 // pull the timestamp out too
-        addEvent(`Stock Checked: ${stock} available — ${product.name}`, "stock");     // log that the stock check finished
-        succeeded = true;                                                             // mark success so we know not to retry
-        break;                                                                        // it worked, stop trying.
-    } catch (err) {
-      lastError = err;                                                                // save it, but dont throw yet, let the loop try again.
-      addEvent(`Stock check attempt ${attempt} failed — ${product.name}`, "stock");   // log the failed attempt so its not silent
+    if (check.ok) {
+      stock = check.stock;
+      stockLastUpdated = check.lastUpdated;
+      addEvent(`Stock Checked: ${stock} available — ${product.name}`, "stock");
+    } else {
+      /* +++++ IF EVERY ATTEMPT FAILED, record the reason and keep going +++++
+      - Instead of throwing (which discarded price/events), we fall through to the normal return below
+      with everything else that was already calculated still intact. */
+      stock = "error";
+      stockLastUpdated = "error";
+      stockError = check.error;
+      addEvent(`Stock check failed for ${product.name}: ${stockError.message}`, "stock");
     }
-  } 
-   
-  /* +++++ IF EVERY ATTEMPT FAILED, record the reason and keep going+++++
-  - Instead of throwing (which discarded price/events), we fall through to the normal return below 
-  with everything else that was already calculated still intact.
-  - it only reaches this if the loop above finished without ever returning true. */
-  if (!succeeded) {
-    stock = "error";
-    stockLastUpdated = "error";
-    stockError = mapStockErrorToReason(lastError);
-    addEvent(`Stock check failed for ${product.name}: ${stockError.message}`, "stock");
-    }   
   } else {
       // if unsuccessful (false)
       // logs the event instead of staying hidden. (now every quote produces a log entry)

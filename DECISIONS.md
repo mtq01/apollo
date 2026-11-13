@@ -1,299 +1,159 @@
-<!--
-Track technical decisions here. Explain what you did and why.
-
-- Add a TODO when you think of something that should be done later.
-- Add a DECISION when you make a judgment call.
-- Not needed every day. Just the days you made a real call or did something
-  technical worth writing down.
-
-Format: a checkbox, a bold label, then plain text.
--->
-
-## August 6, 2026 - Track B
-
-- [ ] **TODO**: Add an optional "type" or "category" field to `ActivityEvent`, plus a filter in the activity log UI. Right now the log shows everything at once. Being able to filter by event type (errors, orders, stock checks) would help with debugging and demos.
-
-## August 11, 2026 - Track A
-
-- [x] **DECISION**: Moved `ActivityEvent` into `types.ts`. Track A produces events and Track B renders them, so the type is shared. Keeping one copy avoids two definitions that drift apart.
-- [x] **DECISION**: Thought about a private `isSameWarehouse` helper so `seeStock` and `accessWarehouse` do not both repeat `account.warehouse === product.warehouse`. Decided not to. It is only used three times, so the helper adds more to read than it saves. Revisit if this logic changes or gets used more.
-- [x] **DECISION**: `AccountProductParams` (the shared `{ account, product }` shape used by `calculatePrice`, `seeStock`, and `accessWarehouse`) is now one interface in `types.ts` instead of three copies. `productQuote.ts` reuses it too.
-- [x] **DECISION**: `getQuoteForProduct` builds its `events` array with a small local `addEvent(message)` helper instead of writing the full `{ id, message, timestamp }` object every time. IDs are a simple counter for now (`event-1`, `event-2`), which is fine while each quote has its own fresh array. This will need `crypto.randomUUID()` once all events go into one shared log.
-- [x] **TODO**: `getQuoteForProduct` did not log anything when stock was hidden by role. It just skipped. Added a "Stock Hidden" event with `category: "access"` so a later step can explain why a field is missing, not just that it is. Done in `productQuote.ts`.
-- [x] **TODO**: When `getERPStock()` timed out, any events gathered so far (like "Price Calculated") were lost, because the function threw a plain error with no events attached. Worth fixing when we redesign error handling. Skipped for now. (Later fixed by the Aug 18 change below.)
-- [x] **TODO**: The counter in `productQuote.ts` needs to become a real unique id using `crypto.randomUUID()` once there is one shared activity log. Duplicate ids would make React render the list wrong. Done. `addEvent` uses `randomUUID()`.
-
-## August 12, 2026 - Track A
-
-- [x] **TODO**: `getERPStock` returned a random number no matter which SKU was asked for, so products in one run got unrelated stock values. Added a SKU parameter so stock is at least tied to the product. Done. `getERPStock(sku, forceFailure?)` now takes the SKU.
-- [x] **DECISION**: `account.warehouse` means the buyer's delivery region, not a warehouse they work at. `product.warehouse` means where that product ships from. The visibility rules compare the two.
-- [x] **DECISION**: Renamed `UserContext.warehouse` to `assignedWarehouse`. The old name wrongly suggested the account owned or worked at a warehouse. Tried `location`, but that was too vague and sounded like a street address. `assignedWarehouse` says what it is: the one warehouse the account is tied to for stock and warehouse visibility.
-- [x] **DECISION**: This is a direct one to one match, not a "nearest warehouse" lookup. A buyer only sees stock and warehouse info for products whose `warehouse` exactly equals their `assignedWarehouse`. There is no distance or routing logic and none is planned.
-- [ ] **TODO**: If real regional routing is ever needed (nearest warehouse with stock, multiple warehouses per account), the data model and this comparison would need to change. Right now it is a flat equality check.
-
-## August 18, 2026 - Track A
-
-- [x] **DECISION**: `getQuoteForProduct` no longer throws when the stock check fails. It always returns normally with everything it already worked out (price, sku, lead time, warehouse, events, calculatedAt). This fixes the Aug 11 problem where events were lost on a timeout, and it also stopped losing price, sku, lead time, and warehouse.
-- [x] **DECISION**: Added a `stockError` field, filled in only when the stock check fails. Reused the existing `ErrorType` from `types.ts` so every part of the app talks about errors the same way.
-- [x] **DECISION**: `stock` and `stockLastUpdated` can now be a number, `"hidden"`, or `"error"`. Before, a role based hide and a real failure looked the same to the caller. Now they do not.
-- [x] **DECISION**: Removed `StockCheckError`. Nothing throws it anymore. Checked the rest of the code first to be sure nothing imported or caught it.
-- [x] **DECISION**: `addEvent` now requires a `category` (`"price"`, `"stock"`, or `"access"`), using the `ActivityCategory` type that already existed. This is part of the Aug 6 TODO about filtering the log. The events are taggable now. The filter UI still needs building.
-- [x] **DECISION**: Stock hidden by role is tagged `category: "access"`, not `"stock"`. Nothing failed. The buyer just is not allowed to see it, so it should not look like an error in the log.
-- [ ] **TODO**: `mapStockErrorToReason` reads the exact wording of the error message from `getERPStock` (it checks if the message includes "timed out"). This works while `mockERP.ts` throws only two distinct messages, but it breaks silently the first time that wording changes. Move to error codes or custom error classes in `mockERP.ts` instead.
-- [x] **TODO**: There was no way to tell "the buyer's text never matched any product" from "a real product was found but its stock check failed." Proposed a `LineItemResult` type (matched vs unmatched). Done on Day 11. `LineItemResult` is live in `route.ts`, and `QuoteResult` already lives in `types.ts`.
-
-## August 19, 2026 - Architecture review (whole team)
-
-> From a review of the code and git history, asking how we would do this at a professional level. Sorted into what is worth doing before the deadline and what we are choosing to defer.
-
-- [ ] **TODO**: Define a real `ERPAdapter` interface (for example `getStock(sku): Promise<{ stock, lastUpdated }>`) that `mockERP.ts` implements, instead of `productQuote.ts` importing `getERPStock` directly. Right now "swappable backend" is true in spirit, but nothing in the types enforces it, so a second backend could quietly not match. This is the cheapest, highest value item on the list.
-- [ ] **TODO**: `forceFailure` lives on the same public `/api/quote` request schema real orders use, so any caller can force a failure. Move it behind a dev only path or env check before deploy.
-- [ ] **TODO**: Check for required env vars (`ANTHROPIC_API_KEY`) once at startup instead of failing wherever the Anthropic client first runs. Zod, which we already use, works for this.
-- [ ] **TODO**: Add a GitHub Action that runs lint and typecheck on every PR, and require it to pass before merging into `staging`. Does not need real tests first.
-- [x] **DECISION**: Thought about a permission table (role, capability, condition) to replace the switch statements in `seeStock` and `accessWarehouse`, which repeat the same `assignedWarehouse` check for manager and buyer. Decided not to now. It is real duplication but small (three roles, two functions), and not worth the time this close to the deadline. Revisit if we add more roles or the rule stops being a flat equality check.
-- [x] **DECISION**: `addOrder()` in `order.ts` reads the file, changes it, and writes it back with no lock. Two orders at the same instant could overwrite each other. Accepting this for demo scope. We will not hit real concurrent traffic before the deadline.
-- [x] **DECISION**: Thought about splitting the buyer facing activity log from internal debug logging. Right now `ActivityEvent` is both. Decided against it. It would touch every file that logs an event, and better internal debugging does not matter much for a demo. Revisit if this ever runs against a real ERP.
-
-## August 20, 2026 - Track B
-
-> Wiring Track C's parser into `/api/quote`, plus a forced failure menu on the reorder page. Track A's Aug 18 change (return instead of throw) landed mid day and changed what the route had to do.
-
-**What the route sends back, per line item**
-
-- [x] **DECISION**: Three outcomes, three row shapes, decided in `app/api/quote/route.ts`. The page renders whatever it is given. It does not decide what to hide.
-  1. **Quoted**: full row with `sku`, `name`, `price`, `stock` (a number or `"hidden"`), `stockLastUpdated`, `leadTime`, `warehouse`, `events`, `calculatedAt`, `quantity`.
-  2. **Stock check timed out**: the same full row. The ERP just did not answer in time, so price, lead time, and warehouse are all still correct. `stock` is `"error"` and `stockError.type` is `"timeout"`.
-  3. **Not found** (the catalog has no match, or the ERP has no record): only `name` (set to the buyer's raw text), `quantity`, `stock`, `stockError`, and `events`. No `sku`, `price`, `leadTime`, or `warehouse`.
-- [x] **DECISION**: Not found rows put the buyer's raw text in `name`, not a product name. If we cannot confirm the item exists, saying "Wireless Mouse" claims more than we know. The raw text also shows the buyer exactly which line failed.
-- [x] **DECISION**: Those fields are left out at the route, not blanked in the page. Sending a price we have decided not to show is dead weight and invites some future component to render it. We tried the blank it in the page version first and removed it.
-- [x] **DECISION**: A stock timeout keeps everything. A not found keeps nothing. A price next to "we could not find this" contradicts itself. A price next to "stock check timed out" does not.
-- [x] **DECISION**: Not found rows still carry `events`, so the activity log shows what happened before the ERP call (price calculated, both retries failing). Those events are useful for debugging even when the row is mostly empty.
-
-**Unmatched items are shown, not dropped**
-
-- [x] **DECISION**: When `lookupProduct` finds no match, the line still produces a row. Before, it hit `continue` and vanished, so a buyer who pasted three items got two back with no idea which one was missing. Backed by NN/g's error message guidance: keep the user's input, never fail silently, offer the fix.
-
-**Page changes**
-
-- [x] **DECISION**: `QuoteRow` makes `sku`, `price`, `leadTime`, `warehouse`, `calculatedAt`, and `events` optional. `name`, `quantity`, and `stock` stay required. An incomplete row is a normal row, and every column already falls back to a dash.
-- [x] **DECISION**: The Stock column reads `stockError.message` when `stock === "error"`. Before Track A's change the error object was in `stock` itself, so the old code read `row.stock.message` and rendered nothing once `stock` became the string `"error"`.
-- [x] **DECISION**: Table rows are keyed by array index, not `row.sku`. Not found rows have no sku, so two of them in one order collided on `key={undefined}`.
-- [x] **DECISION**: The activity log markup moved out of the page and into the `DisplayActivity` component, which had been written on Day 4 and never used.
-
-**Forced failure menu**
-
-- [x] **DECISION**: A dropdown on the reorder page sends an optional `forceFailure` (`"timeout"` or `"not found"`) with the quote request, using Track A's existing `forceFailure` parameter. Both failures can now be demoed on demand instead of waiting for the random 15% timeout.
-- [x] **DECISION**: `forceFailure` is passed as an argument to `getCachedQuote`, not read from an outer variable, so it is part of the cache key. Otherwise a cached success would replay and the menu would look broken.
-- [x] **DECISION**: `null` is turned into `undefined` before the request is sent. `JSON.stringify` drops `undefined` keys but sends `null`, and `null` fails the `z.enum` check.
-
-**Request validation**
-
-- [x] **DECISION**: The request body is checked with a Zod schema (`text`, `accountId`, optional `forceFailure`) instead of hand written `if` checks. `safeParse` never throws, so it fits the guard clause style the route already uses.
-- [x] **DECISION**: Any problem with `accountId` reports "Please log in", no matter which check failed, so Zod's internal wording never reaches a buyer. Text errors keep their specific messages, because "too long" and "empty" need different fixes.
-- [x] **DECISION**: Error objects use `satisfies ErrorType`, not `as ErrorType`. `satisfies` checks the object. `as` silences the check. A `type: "parse failed"` typo was live in this file until the annotation caught it.
-
-**Things this turned up**
-
-- [ ] **TODO**: The Stock column prints `stockError.message` straight from Track A, which is internal wording ("Product not found in ERP system."). Map `stockError.type` to buyer facing copy in the page instead.
-- [x] **TODO**: The catalog miss and the ERP not found were both `type: "not found"`, told apart only by which field carried them. Fixed on Day 11. `status: "unmatched"` on `LineItemResult` is the catalog miss. A `stockError` on a matched row is the ERP miss.
-- [ ] **TODO**: The parser drops items when a quantity trails the product name. `"2 mouses, 2 lanterns"` returns two items. `"mouse 2, page 2"` returns one item named "mouse" and loses "page". Trailing numbers read as model numbers, not quantities. Look at the tool description in `recordItemsTool.ts`.
-- [x] **TODO**: `parseOrder` runs on every request and is not cached, so it dominates request time now that the ERP calls are cached. Same text plus same account should parse the same way. Half done on Day 11. `temperature: 0` makes the parse deterministic. The caching and performance half is still open.
-- [x] **TODO**: `lookupProduct` only matched by substring, so "wireless mice" did not find "Wireless Mouse". Fixed on Day 11. `lookupProduct` is unchanged, but a miss now falls through to `findClosestMatches`, so "wireless mice" comes back as a suggestion instead of a dead end.
-
-## August 26, 2026 - Track C
-
-> Interface contract for Track A's Day 11 fuzzy match helper, worked out before Track A built it so the signature is right the first time. Resolves the Aug 18 and Aug 20 notes about catalog miss vs ERP miss.
-
-- [x] **DECISION**: The fuzzy match helper imports `catalog.json` itself instead of taking the catalog as an argument, the same pattern `lookupProduct` uses. The call site stays a one argument function, `findClosestMatches(query)`.
-- [x] **DECISION**: The helper returns matches shaped as `{ product: Product; score: number }[]`, not `Product[]` with a score bolted on. A suggestion has to be something the buyer can actually select, so it needs the full `Product` (for the sku). Wrapping it in `{ product, score }` keeps `Product` a clean data type and shows the score belongs to the match, not the product.
-- [x] **DECISION**: The "too different, suggest nothing" cutoff is applied inside the helper, before it returns anything. The caller never checks the score. "Close enough" is decided once, in one place. The score still comes back on each match, as extra information, not as a threshold the caller has to apply.
-- [x] **DECISION**: Track C owns a new function (in `lib/agent/`) that calls the helper and produces suggestions plus buyer facing text. Track B wires that into the "not found" branch of `route.ts`. Same split as `parseOrder`: Track C writes the function, Track B wires it, nobody edits `route.ts` from another track.
-- [x] **DECISION**: Suggestions are a new optional field on `LineItemResult`'s `unmatched` variant, not on the shared `ErrorType`. `ErrorType` is used app wide (timeout, restricted, invalid input), and suggestions never matter for those. Putting the field on `unmatched` keeps it where it is the only case that uses it.
-- [x] **DECISION**: `LineItemResult` replaces the inline "not found" logic in `route.ts` and the shared `type: "not found"` that used to cover both a catalog miss and an ERP miss. `status: "unmatched"` now means "no catalog match", the only case fuzzy suggestions should fire for. A matched quote that carries a `stockError` (an ERP timeout) never gets suggestions, because the product was real, just not checkable.
-
-## August 26, 2026 - Track A and Track C (Day 11 build)
-
-> What got decided while building the fuzzy match feature, on top of the contract above.
-
-- [x] **DECISION**: Changed the catalog SKUs from `SKU-1001` through `SKU-1008` to codes like `PER-2284`, `ACC-3391`, `DSP-7742` (a different prefix per category, random looking numbers). The old SKUs only differed by their last digit, so every product was one typo away from every other product, and fuzzy matching could not tell them apart. `data/order-history.json` was updated to match, so old fake orders still point at real products.
-- [x] **DECISION**: Used the `fastest-levenshtein` library to measure how different two strings are. Picked it over `leven` (which only supports import styles that cause issues here) and `fuzzysort` (built for search ranking, its scores do not compare fairly between a product name and a SKU).
-- [x] **DECISION**: The helper checks the buyer's text against each word in a product name, not the whole name at once. A short typo like "kabord" compared against the full name "Mechanical Keyboard" looks very different, mostly because of the extra word "Mechanical". Checking word by word lets a one word typo match the one word it is close to.
-- [x] **DECISION**: The cutoff (how different a guess can be before we stop suggesting it) started at 30% of the typed text's length. Testing showed that was too strict. "kabord" for "keyboard" was rejected. Raised it to 40% and re tested every typo case plus a nonsense input ("banana") to be sure it did not start showing bad guesses.
-- [x] **DECISION**: Set `temperature: 0` on the Claude call in `parseOrder.ts`. Without it, Claude could read the same typo differently across identical requests. Sometimes it silently fixed it to the real product name before our code saw it, sometimes not. `temperature: 0` makes it answer the same way every time.
-- [x] **DECISION**: Changed `tool_choice` from `"auto"` to `"any"` on the same call. Claude could sometimes respond without calling either tool, which `parseOrder.ts` had no handling for. `"any"` forces it to always call one of the two tools.
-
-## August 27, 2026 - Open for the team (raised by Track A)
-
-> Found while reviewing the Day 11 build. Not a bug in the fuzzy match work. A question about how much the parse step should change on the buyer's behalf. Nothing was changed in code.
-
-- [ ] **TODO**: Claude silently corrects misspelled product names and the buyer is never told. `record_items` rewrites an obvious typo into a real product name before our code sees it. On the running app:
-
-  ```
-  "2 wireless mise"  ->  productGuess.name: "wireless mouse"   exact match, full priced quote
-  "2 wireless mice"  ->  productGuess.name: "wireless mice"    no match, falls through to suggestions
-  ```
-
-  The first one returns a finished quote for Wireless Mouse x2 with no sign the buyer's words were changed. A quote commits real money to a product they did not type. A correction should show as "did you mean", not a silent swap. Note that `temperature: 0` does not fix this. It made the correction consistent, not visible.
-
-- [ ] **TODO**: `confidence` cannot carry this signal, so a new field is needed. `confidence` grades how many attributes the buyer gave, not whether Claude changed their words. Measured:
-
-  ```
-  "2 wireless mise"   (corrected)     confidence: medium
-  "2 wireless mouse"  (clean input)   confidence: low
-  ```
-
-  The corrected input scored higher than the clean one. The `note` field does contain the fact, but as free text, so branching on it means string matching for the word "misspelling", which breaks the first time Claude words it differently. Proposed: a `correctedFrom: string | null` on each item in `recordItemsTool.ts`, holding the buyer's original wording when Claude changed it, null when it did not.
-
-- [ ] **TODO**: Open UX call, hard or soft. Hard: a corrected item becomes an unmatched row the buyer has to confirm, like a fuzzy miss. Safest, but typos are the normal case, so every one is an extra click. Soft: still quote it, but mark the row ("Wireless Mouse, you typed 'mise'"). Soft fits today because this screen produces a quote, not an order. That flips to hard if this screen ever places the order directly.
-
-- [ ] **TODO**: A correctly spelled word can fail where a typo succeeds. "wireless mice" is valid English, so Claude leaves it alone, and `lookupProduct` handles plurals with `.replace(/s$/, "")`, which does nothing for mice and mouse. So the misspelled input gets a clean quote and the correct one gets a "did you mean". Same for boxes and box, knives and knife. Either match on `productGuess.attributes` alongside the name, or accept it and let the fuzzy suggestion handle it.
-
-## September 2 to 3, 2026 - The reorder cart
-
-> Built the "add to cart" flow. Before this, a lookup gave a one time quote and that was the end of it. Now results go into a cart the buyer builds up, edits, and places as one order.
-
-**The shared pricing function**
-
-- [x] **DECISION**: Pulled the per item pricing loop out of `app/api/quote/route.ts` into one shared function, `priceItems(account, items, forceFailure)` in `lib/erp/priceItems.ts`. It takes each item, resolves it against the catalog, and builds a priced row (or an unmatched row with suggestions). The text path and the new deterministic path both call it, so the response shape stays the same for both.
-- [x] **DECISION**: Added `POST /api/quote/items`. It takes `{ accountId, items: [{ sku, quantity }], forceFailure? }` and calls `priceItems` directly. A caller that already knows the SKUs (a past order, a typed code) has nothing to parse, so this skips `parseOrder` and Claude. It is faster, cheaper, and gives the same answer every time.
-
-**The paste box now feeds a cart**
-
-- [x] **DECISION**: The reorder page has one text box, not a separate "add by SKU" field. An earlier attempt added a dedicated SKU field. It was redundant with the paste box, which already accepts SKUs. One entry point.
-- [x] **DECISION**: If the whole pasted text is only product codes (a regex check in `parseSkuList`), the request goes to `/api/quote/items` and skips Claude. Anything with real words still goes through `/api/quote`. Codes that start with `inv-`, `order-`, or `po-` are left out of that check so a PO lookup still goes through Claude.
-- [x] **DECISION**: The lookup result is the editable draft. There is no separate "add to cart" step and no floating cart panel. Considered a persistent cart that accumulates across many searches. Chose the simpler model: results drop straight into one draft ("Your Cart") that the buyer edits in place. A pasted list adds to the same draft rather than replacing it.
-- [x] **DECISION**: Matched rows (real sku, real name, a numeric price) go into the cart. Everything else goes into a "Couldn't add these" list below, with its "did you mean" suggestions. Picking a suggestion adds it to the cart.
-
-**The cart itself**
-
-- [x] **DECISION**: The cart lives in React Context (`DraftOrderProvider`), in memory. It is not a server side cart. It is lost on a page refresh. This is the demo scoped choice. A real cart would be server backed. `localStorage` is the middle option if losing it on refresh becomes annoying.
-- [x] **DECISION**: The context lives in `DraftOrderContext.tsx`, separate from the `DraftOrder` component, so the paste box and the orders page can both add to the same cart without prop drilling through the layout.
-- [x] **DECISION**: `addLines` merges by sku. Adding a sku that is already in the cart adds the new quantity onto the existing row instead of making a second row. On a merge, the existing row keeps its original source and sourceRef. This can slightly misrepresent a merged row (part of its quantity may have come from a different place), but the collision is rare and low stakes.
-- [x] **DECISION**: The cart re prices itself on every change (add, remove, quantity edit), debounced by 500ms, by calling `/api/quote/items` with the whole cart. Price is never stored on a cart line. The numbers on screen always match the current catalog and account. Quantity edits below 1 are clamped to 1.
-
-**Price breakdown**
-
-- [x] **DECISION**: The cart and the order cards both show Sub Total, Discount, Tax, Total, and Internal Cost. `priceItems` now returns `listPrice` (before discount) and `internalCost` per row so these can be worked out. Discount is `listPrice - price` times quantity. Tax is 7%, the same rate the invoice card uses, applied after the discount.
-- [x] **DECISION**: Added `internalCost` to the catalog (`Product.internalCost?`, about 60% of `basePrice`). It is admin only, the same rule `visibleInvoice()` uses for invoices. The API sends the number for admin accounts and the string `"hidden"` for everyone else, and the UI shows "Restricted" when it is hidden.
-
-**PO lookups**
-
-- [x] **DECISION**: Typing a PO number like `inv-1001` no longer shows an invoice card. It drops that order's line items straight into the cart, the same as reordering a past order. Removed the invoice card and the code that supported it (the tax math, `formatInvoiceDate`, the `Results` union). The invoice lookup on the backend is unchanged.
-
-**Orders page**
-
-- [x] **DECISION**: Added a page at `/orders` and an "Orders" item in the sidebar. Listing every past order is a basic action and should not need the buyer to phrase a sentence for Claude. The paste box still handles the fuzzy queries and a specific PO number.
-- [x] **DECISION**: `GET /api/orders` lists the account's past orders with product names and prices filled in (via `calculatePrice`). Each order is a card. Each line has a checkbox (checked by default, disabled for a discontinued sku) and an editable quantity. "Add selected to your order" puts the ticked lines into the cart.
-- [x] **DECISION**: Used a native `<input type="checkbox">` on the orders page. `components/ui/checkbox.tsx` was removed in the earlier dashboard cleanup, and re adding it was not worth it for one checkbox column.
-- [x] **DECISION**: `POST /api/orders` places the order. It checks every sku is real against the catalog, then calls `addOrder` with a generated `order-<uuid>` id and a timestamp.
-
-**Forced failures in the cart**
-
-- [x] **DECISION**: The demo "Force Failure" dropdown value is now passed into the cart's re price request, not just the first paste. Before, a forced timeout entered the cart with a price and then re priced cleanly, so the error never showed. `DraftOrder` takes `forceFailure` as a prop and sends it on every re price.
-- [x] **DECISION**: `priceItems`'s "not found" row now keeps its `sku`. The catalog match succeeded, only the ERP stock check failed, so the row is a known product with no stock info. Keeping the sku lets the cart still show the row and its error. This narrows the Aug 20 "not found keeps nothing" rule to the deterministic path.
-- [x] **DECISION**: Brought back the two alert banners above the cart table. A red banner names the first failed line, or the orange "stock may be a few hours old" reminder shows when nothing failed.
-
-**Source tags and confirmation**
-
-- [x] **DECISION**: A cart line added from a PO or a past order shows a small green tag under the sku, like "from inv-1001" or "from order-3". A line from a suggestion shows "suggested". Typed and pasted lines show nothing. `DraftLine` gained a `sourceRef` field for this.
-- [x] **DECISION**: A `sonner` toast confirms each add ("Added 3 items from inv-1001"). The orders page keeps its inline confirmation with a link back to the reorder page, since the buyer needs to navigate off that page.
-
-**Cleanup and readability**
-
-- [x] **DECISION**: Removed unused debug routes: `ping`, `lookup`, `stock`, `price`, `test`, `track-a-test`, and the `testt.ts` scratch file. They were one line "it works" stubs and dev scratch.
-- [x] **DECISION**: Merged `useIsMobile` and `useIsBelowLg` onto one `useSyncExternalStore` helper in `hooks/use-mobile.ts`. This also removed the `set-state-in-effect` lint warning the stock `useIsMobile` had.
-- [x] **DECISION**: Rewrote comments across the cart, activity log, and orders code in plain language, and renamed short variable names to descriptive ones.
-
-**Still open**
-
-- [ ] **TODO**: The cart is in memory only. Add `localStorage` or a server cart if losing it on refresh is a problem.
-- [ ] **TODO**: If a PO has a sku that has left the catalog, the line is still added to the cart but will not price. There is no warning for this yet.
-- [ ] **TODO**: "Place order" only writes to `order-history.json`. Since a PO lookup now reads from `invoices.json`, an order you place cannot be looked up by its PO number afterward, and it loses its prices. Consider writing an invoice too, with the same id. That would need a `tax` field on the `Invoice` type and a rule for `restrictedFields`.
-- [ ] **TODO**: **Related quirk worth deciding at the same time: a correctly spelled word can fail where a typo succeeds.** `"wireless mice"` is valid English - the plural of mouse - so Claude leaves it alone, and `lookupProduct` handles plurals with `.replace(/s$/, "")`, which does nothing for mice/mouse. So the misspelled input gets a clean quote and the correctly spelled one gets a "did you mean". Same applies to boxes/box, knives/knife, feet/foot. Either match on `productGuess.attributes` alongside the name, or accept it and let the fuzzy suggestion handle it.
-
-## September 3, 2026 - Orders and invoices are one thing now
-
-> Placing an order used to write a bare `{ id, items: [{sku, quantity}], timestamp }` row to `order-history.json`. The orders page then priced every line again on each load. So the totals shown were never the totals the buyer agreed to, they were recomputed against whatever the catalog said today. This merges the two.
-
-- [x] **DECISION**: `POST /api/orders` now prices the whole order once and saves a full `Invoice` to `invoices.json`. The invoice stores per line `listPrice`, `price`, and `internalCost`, plus order level `subtotal`, `discount`, `tax`, `totalAmount`, and `internalCost`. Readers display these stored numbers and never price anything.
-- [x] **DECISION**: All the money math lives in one new file, `lib/erp/summarizeOrder.ts`. It exports `TAX_RATE` and `summarizeOrder(account, items)`. `DraftOrder.tsx` and the orders page import `TAX_RATE` from here instead of each keeping their own `0.07`.
-- [x] **DECISION**: New order ids are `inv-1006`, `inv-1007`, and so on. The route reads the current invoices, finds the highest `inv-<number>`, and adds one. A placed order can now be pasted back into the reorder box like any other invoice, because it is one.
-- [x] **DECISION**: `order-history.json` and `lib/erp/order.ts` are deleted. Its three functions moved into `lib/erp/invoice.ts` as `getAllInvoices`, `getAccountInvoices`, and `saveInvoice`. The dead `Order` type is removed from `types.ts`.
-- [x] **DECISION**: `GET /api/orders` runs each invoice through `visibleInvoice`, the same gate the paste flow already used. Buyers and managers see "Restricted" for discount and internal cost. No second set of role rules.
-- [x] **DECISION**: The `get_order_history` tool keeps its name. To a buyer, "my past orders" and "my invoices" are the same list now, and the name reads better in the tool description. It returns invoices.
-- [ ] **TODO**: `saveInvoice` does a read then write on `invoices.json` with no lock, so two orders placed at the same instant could clobber each other. Same known limit the old `addOrder` had. Fine for demo scale.
-- [ ] **TODO**: A PO line for a sku that has left the catalog still has no warning. `summarizeOrder` throws on an unknown sku, and `POST /api/orders` checks every sku is real before calling it, so a placed order is always clean. But a stored invoice from before a product was pulled would break `visibleInvoice`. Not a live scenario yet.
-
-## September 4, 2026 - Cleanup pass
-
-> A no-code review of the whole project looking for bloat: dead files, a dependency that does not fit, and files that have grown too large. Nothing below has been changed yet, these are TODOs to work through.
-
-- [ ] **TODO**: `styled-components` is a dependency used for exactly one thing, the dot spinner in `components/Loader.tsx`. Every other pixel in the app is Tailwind. Rewrite the spinner in Tailwind or plain CSS and drop the dependency.
-- [x] **TODO**: Delete confirmed dead files, zero importers found: `components/EmptyState.tsx`, `components/Spinner.tsx`, `components/activity-log/testData.ts`, `components/ui/select.tsx` (the app uses `native-select.tsx` instead), `components/ui/label.tsx`, and the `SelectAccount` component inside `components/account/AccountSelector.tsx` (only that file's other export, `accountList`, is actually used).
-- [x] **TODO**: `app/claudetest/page.tsx` posts to `/api/test`, which no longer exists, so the page 404s on every submit. It is still linked in the real left nav next to Reorder and Orders. Either wire it to a real route or pull it out of the nav.
-- [ ] **TODO**: `components/draft-order/DraftOrder.tsx` is 535 lines, the largest hand-written file in the app, doing five jobs at once: re-pricing, totals math, banners, table markup, and placing the order. Split it into a pricing hook plus a few presentational pieces next time it needs a real change.
-- [ ] **TODO**: `lib/erp/` originally meant "the fake ERP system" (`mockERP.ts`, `accountRules.ts`) but now also holds `invoice.ts`, `summarizeOrder.ts`, and `priceItems.ts`, which are our own order and pricing logic, not a simulation of an external system. Worth a deliberate split if the folder keeps growing.
-
-## September 14, 2026 - Speed, demo buttons, and two account-aware fixes
-
-- [x] **DECISION**: `priceItems` used to check stock for each item one at a time, in order. Now it checks all items at the same time. Each item's stock check does not depend on any other item, so there was no reason to make them wait in line. A 5-item paste used to run 5 stock checks back to back. Now they all run together.
-- [x] **DECISION**: Added 4 quick-action buttons to the Reorder page: last invoice, look up a PO number, simulate a stock delay, and paste a product list. A button only fills in the text box. It never submits anything on its own. The buttons stay greyed out until an account is picked, since every quote needs one, and a small note under them explains why.
-- [x] **DECISION**: Fixed "reorder my last order." It used to ask Claude for the account's order history, then have Claude guess which products to add. That guess could lose track of which invoice the items came from, so no green tag or date showed up in the cart. In one case, it even mixed items from two different invoices into one list. Now it looks up one exact invoice instead, the same way typing an invoice number already worked.
-- [ ] **TODO**: That fix means you can no longer grab just part of an old invoice, or change the quantity, through that path. It always returns the whole invoice now. Worth another look if partial reorders turn out to matter.
-- [ ] **TODO**: The fix above depends on Claude actually following the new tool instructions. Needs testing live with a real API key across a few phrasings ("last order," "last invoice," "items from my last invoice") and a few accounts before trusting it in a demo.
-- [x] **DECISION**: Lead time now changes based on the account, the same way price already does. Add 2 days if the product does not ship from the account's own warehouse. Subtract 1 day if the account is a contract account. Lead time can never go below 1 day.
-
-## September 15, 2026 - Logging gaps, message accuracy, and shared reset logic
-
-- [x] **DECISION**: `DraftOrder.tsx`'s cart re-pricing was not logging anything when a stock check, a pricing request, or the network itself failed. Neither was `app/orders/page.tsx`, which had no activity log wiring at all. Both now log every failure.
-- [x] **DECISION**: A batch of failed stock checks used to log one line per item and show only the first failed item's name in the red banner. Now it is one log line naming every affected item, and a generic banner ("N items could not be checked") since one item's specific error was never true for all of them.
-- [x] **DECISION**: Fixed a bug where a "not found" stock failure on a cart line showed the SKU instead of the product name. `priceItems.ts` already had the product matched in the catalog at that point, its name was just not being used.
-- [x] **DECISION**: Cleaned up the wording in `errorMessages.ts`. The timeout message no longer says "please try again" with no way to actually do that, it now explains the cart rechecks on its own on the next update. "Not found" no longer always says "product" when the failure could be an invoice or an account. "Invalid input" dropped form-validation phrasing like "the information provided."
-- [x] **DECISION**: `ErrorMessage.tsx` (the banner shown via `app/page.tsx`) was always showing the generic type-based message and throwing away the specific message the server already wrote for that exact failure, like "Invoice with ID inv-9999 not found." It now shows the server's message first, falling back to the generic one only if none was set.
-- [x] **DECISION**: Seeded 3 more invoices in `data/invoices.json` so every demo account has at least 3, sizes range from 1 to 8 items across the set, and one invoice (account 3) covers every product in the catalog.
-- [x] **DECISION**: The activity log now clears when the account changes, the same rule the cart already followed. Added to `ActivityProvider.tsx`.
-- [x] **DECISION**: The cart and the log both had their own copy of the same "clear this when the account changes, but not on the first pick" `useRef`/`useEffect`. Pulled it into one hook, `useResetOnAccountSwitch`, in `hooks/use-reset-on-account-switch.ts`. The reorder page's text box still has its own copy on a different branch, and needs to switch to the hook too once the branches merge together.
-- [x] **TODO**: `priceItems.ts`'s `catch` block (a genuinely unexpected pricing error, not a stock "not found") still uses `item.rawText` for the display name instead of `product.name`, the same bug as above, just the rarer path. Not fixed yet.
-
-## September 15, 2026 - Table width, log detail by reason, and the force-failure scope bug
-
-- [x] **DECISION**: The reorder page's text box now uses the shared `useResetOnAccountSwitch` hook too, closing out the TODO from the last entry. The cart, the log, and the text box all clear on an account switch through the same hook now.
-- [x] **DECISION**: A timeout and a "not found" stock failure used to log identical text, since the log line only listed product names, never the reason. Failed rows are now grouped by their actual error message, so each distinct reason gets its own log line instead of one line covering everyone.
-- [x] **DECISION**: Stale stock never logged anything. It does not set `stockError`, it is a successful check with an old timestamp, so it never matched the failure check. Pulled the staleness check into one shared `isStale()` function, used by both the new log line and the existing banner, instead of two copies of the same comparison.
-- [x] **DECISION**: The longer timeout message broke the table layout. Table cells do not wrap text by default, so a long message forced the Stock column wide, which pushed the whole table out and shrank the activity sidebar. The Stock cell now allows wrapping, so a long message grows the row instead of the page.
-- [x] **DECISION**: Fixed a bug where forcing a failure from the demo dropdown, while adding one new item, also showed the error for every item already in the cart. The cart used to re-check every line on any change. Now it only re-checks lines that are new, previously failed, or stale, everything already priced fine keeps its cached result. `forceFailure` also clears itself after one use instead of lingering into unrelated re-prices later.
-- [ ] **TODO**: That fix means the cart holds onto a cached price per sku until something asks it to recheck (a new item, a past failure, stale stock, or an account switch). If a price genuinely changed in the catalog with none of those happening, the cart would not notice until something else forced a recheck.
-
-## September 15, 2026 - Order safety, cart feedback, and the Admin role
-
-- [x] **DECISION**: Found a race condition in the force-failure fix above. Resetting `forceFailure` was itself a dependency of `refreshPrices`, so the reset alone triggered another re-price right away. That second check ran unforced and often quietly succeeded, overwriting the failure that was just demonstrated. `refreshPrices` now reads `forceFailure` through a ref instead of depending on it, so resetting it no longer starts a new check on its own.
-- [x] **DECISION**: Nothing stopped an order from being placed with a line whose stock check had failed, even though the row clearly showed the failure. "Place order" is now disabled whenever any line has a stock error, with a message explaining why, plus the same check inside `placeOrder()` itself as a backup.
-- [x] **DECISION**: `POST /api/orders` never checked stock at all, only that each sku exists in the catalog. It now re-verifies stock for every item, fresh and uncached, right before pricing and saving, using the same `getQuoteForProduct` the cart uses. If anything fails, the whole order is rejected with a message naming which products could not be confirmed.
-- [x] **DECISION**: Renamed the `setForceFailure` prop on `DraftOrder` to `setForceFailureAction`. With `cacheComponents` on, Next requires a function prop on a `"use client"` component to be named `action` or end in `...Action`, or it gets flagged even when, like here, it is a plain client-to-client callback that never crosses a real server boundary.
-- [x] **DECISION**: The "Couldn't add these" list had no way to dismiss anything. Added a per-row dismiss button, same icon and behavior as removing a cart line, and a "Clear" link for the whole list.
-- [x] **DECISION**: A newly added cart line showed every column as "—" until pricing finished, the same placeholder used for genuinely hidden data, so it looked finished instead of in progress. A line with no priced result yet now shows a small pulsing placeholder instead.
-- [x] **DECISION**: Clicking "Add Products" into a cart that already had items gave no feedback while the lookup ran, the loading spinner only ever showed on a fully empty cart. Added a purple banner with a spinning icon, "Updating cart...", for that same window no matter what is already in the cart.
-- [x] **DECISION**: Internal Cost showed "Restricted" for manager and buyer, but it is restricted for them 100% of the time, no exceptions, unlike Warehouse or Stock which are only sometimes restricted depending on the item. Hid the row entirely for non-admin roles instead of always showing "Restricted" for a number they can never see.
-- [ ] **TODO**: Admin represents the supplier's own staff, not a customer, they see internal cost and can look up any invoice by id. But the account switcher has no "acting on behalf of a customer" concept, so an order placed while logged in as Admin is attributed to Admin's own account, same as a real customer buying for themselves. Real-world reading that still holds up: assisted ordering, staff placing an order for a customer over the phone. Not built. Worth a note in the README rather than new code, unless assisted ordering turns out to matter.
-- [x] **TODO**: Confirmed Admin's "see any invoice" ability only covers the individual PO-number lookup (`lookUpInvoice`). `GET /api/orders` always filters by one `accountId`, regardless of role, so Admin cannot browse every account's orders as a list on the Orders page, only fetch one they already know the id for by typing it into the reorder box.
-- [x] **DECISION**: Fixed the gap above. `GET /api/orders` now returns every account's invoices when the requester is admin, instead of just their own. The Orders page only shows which account an order belongs to when more than one shows up in the list, so a normal buyer or manager's view looks exactly like it did before.
-- [x] **DECISION**: Added a "Accounts and roles" section to the README explaining buyer and manager are customers, admin is the supplier's own staff, and noting the assisted-ordering gap from the TODO above instead of building it.
-
-## September 20, 2026 - Test tooling
-
-> The project had no automated tests. This sets up the tools and adds a first test to prove they work.
-
-- [x] **DECISION**: Picked Vitest as the test runner. It handles TypeScript and modern imports with almost no setup, and it runs fast.
-- [x] **DECISION**: Added `jsdom` and React Testing Library. `jsdom` fakes a browser so hooks and components can run in a test. They are not needed for the first test, but the cart hook tests will need them, and this saves a second setup PR.
-- [x] **DECISION**: Left out `@vitejs/plugin-react`. Installing it clashed with the Babel 7 version that `shadcn` brings in. Plain `.ts` tests do not need it.
-- [x] **DECISION**: Bumped `@types/node` from 20 to 22. We run Node 22, so the old types were out of date, and Vitest would not install with them.
-- [x] **DECISION**: The config file is `vitest.config.mts`, not `.ts`. Node read the `.ts` file as an older style and warned. The `.mts` name marks it as a modern module without changing how the rest of the project loads. Did not set `"type": "module"` in `package.json`, since that could break other config files.
-- [x] **DECISION**: Used Vite's built-in `resolve.tsconfigPaths` so `@/` imports work in tests, and removed the `vite-tsconfig-paths` plugin. The plugin was no longer needed.
-- [x] **DECISION**: Test files sit next to the code they test, like `fuzzyMatch.test.ts` beside `fuzzyMatch.ts`. End-to-end tests will get their own folder later.
-- [x] **DECISION**: The first test covers `findClosestMatches`. It is a plain function with no browser needed, and it already existed. Three checks: a typo finds the right product, letter case does not matter, and nonsense gets no suggestions. Also made one fail on purpose to confirm the runner really checks results.
-- [ ] **TODO**: `npm audit` shows 4 vulnerabilities (1 critical). None come from the test packages. They are in `next` 16.2.12 (with `postcss` and `sharp`) and `js-yaml`. Fix in a separate PR by bumping `next` and `eslint-config-next` to 16.3.5, then run `npm audit fix` for `js-yaml`.
-- [ ] **TODO**: Add `@vitejs/plugin-react` when we start testing `.tsx` components, if it is needed. It will need a version that works with `shadcn`'s Babel.
-- [ ] **TODO**: Make CI run `npm test`. This adds to the GitHub Action TODO from Aug 19.
-- [ ] **TODO**: Add an `.nvmrc` or `engines` field so everyone uses Node 22.
-- [ ] **TODO**: Write the next tests: `parseSkuList`, then the cart code (`computeCartTotals`, `isStale`, `useCartPricing`) once the cart refactor is merged, then one Cypress flow.
-
+# Decisions Log
+
+How to use this file:
+
+- **Decisions:** add a row when you make a judgment call. Newest at the bottom.
+- **Open TODOs:** add a row for something that should be done later. When it's done, delete the row and add a decision row saying what was done.
+- One idea per row, in plain language. When a later decision replaces an earlier one, say so in the earlier row ("Changed 2026-09-03").
+- Write `|` inside a cell as `\|`, or the table breaks.
+
+## Decisions
+
+| Date | Decision | Reason |
+| --- | --- | --- |
+| 2026-08-11 | `ActivityEvent` lives in `types.ts`. | Track A produces events and Track B renders them. One shared copy can't drift apart. |
+| 2026-08-11 | No `isSameWarehouse` helper for the `account.assignedWarehouse === product.warehouse` check. | Only three uses, so a helper adds more to read than it saves. Revisit if the rule changes or spreads. |
+| 2026-08-11 | `AccountProductParams` (`{ account, product }`) is one interface in `types.ts`, used by `calculatePrice`, `seeStock`, `accessWarehouse` and `productQuote.ts`. | Replaces three copies of the same shape. |
+| 2026-08-11 | `getQuoteForProduct` builds its events with a local `addEvent(message, category)` helper. | Avoids writing the full event object every time. |
+| 2026-08-11 | Stock hidden by role logs a "Stock Hidden" event with `category: "access"`. | A later step can explain why a field is missing, not just that it is. |
+| 2026-08-11 | Event ids use `crypto.randomUUID()`, replacing a per-quote counter (`event-1`, `event-2`). | Duplicate ids in one shared log make React render the list wrong. |
+| 2026-08-12 | `getERPStock(sku, forceFailure?)` takes the SKU, and the same SKU always returns the same stock count. | Random stock per call gave products in one run unrelated values. |
+| 2026-08-12 | `UserContext.warehouse` is renamed `assignedWarehouse`: the one warehouse an account is tied to (its delivery region). `product.warehouse` is where a product ships from. | The old name suggested the account owned or worked at a warehouse. `location` was too vague and sounded like a street address. |
+| 2026-08-12 | Visibility is an exact match: an account sees stock and warehouse info only for products whose `warehouse` equals its `assignedWarehouse`. No nearest-warehouse or routing logic. | Simple and predictable. None is planned. |
+| 2026-08-18 | `getQuoteForProduct` never throws on a failed stock check. It returns price, sku, lead time, warehouse, events and `calculatedAt`, plus a `stockError`. | A thrown timeout used to lose everything already worked out, including the log events. |
+| 2026-08-18 | `stockError` reuses the shared `ErrorType`. | Every part of the app describes errors the same way. |
+| 2026-08-18 | `stock` and `stockLastUpdated` are a number, `"hidden"` or `"error"`. | A role-based hide and a real failure used to look the same to the caller. |
+| 2026-08-18 | Removed `StockCheckError`. | Nothing threw it anymore. Checked that nothing imported or caught it first. |
+| 2026-08-18 | `addEvent` requires a `category` (`"price"`, `"stock"`, `"access"`, …) using `ActivityCategory`. | Makes events filterable. The filter UI is still an open TODO. |
+| 2026-08-18 | Stock hidden by role is tagged `"access"`, not `"stock"`. | Nothing failed, so it shouldn't look like an error in the log. |
+| 2026-08-19 | No permission table (role, capability, condition) to replace the switch statements in `seeStock` and `accessWarehouse`. | Real duplication, but small (three roles, two functions). Revisit with more roles or a rule that isn't a flat equality check. |
+| 2026-08-19 | Writing the orders file with read-then-write and no lock is accepted. | Demo scope. No real concurrent traffic before the deadline. Still true for `saveInvoice` (see open TODOs). |
+| 2026-08-19 | `ActivityEvent` stays both the buyer-facing log and internal debug logging. | Splitting them touches every file that logs. Revisit if this runs against a real ERP. |
+| 2026-08-20 | `/api/quote` returns one of three row shapes per line, decided in `route.ts`: (1) quoted: the full row; (2) stock check timed out: the full row with `stock: "error"` and `stockError.type: "timeout"`; (3) not found: only `name`, `quantity`, `stock`, `stockError` and `events`. The page renders what it's given. | A timeout keeps everything because price, lead time and warehouse are still correct. A price next to "we couldn't find this" contradicts itself. Narrowed 2026-09-02. |
+| 2026-08-20 | Not-found rows put the buyer's raw text in `name`. | A product name would claim more than we know, and the raw text shows which line failed. |
+| 2026-08-20 | Fields a row shouldn't show are left out at the route, not blanked in the page. | Unused data invites a future component to render it. The blank-in-page version was tried and removed. |
+| 2026-08-20 | Not-found rows still carry `events`. | The log shows what happened before the ERP call (price calculated, both retries failing). |
+| 2026-08-20 | An unmatched line still produces a row instead of being dropped. | A buyer who pasted three items and got two back couldn't tell which was missing. NN/g guidance: keep the input, never fail silently, offer the fix. |
+| 2026-08-20 | `QuoteRow` makes `sku`, `price`, `leadTime`, `warehouse`, `calculatedAt` and `events` optional. `name`, `quantity` and `stock` stay required. | An incomplete row is a normal row, and every column already falls back to a dash. |
+| 2026-08-20 | The Stock column reads `stockError` when `stock === "error"`. | After the 2026-08-18 change, the old `row.stock.message` rendered nothing. |
+| 2026-08-20 | Table rows are keyed by array index, not `sku`. | Not-found rows have no sku, so two of them collided on `key={undefined}`. |
+| 2026-08-20 | The activity log markup moved into the `DisplayActivity` component. | It was written on Day 4 and never used. |
+| 2026-08-20 | A demo dropdown on the reorder page sends an optional `forceFailure` (`"timeout"` or `"not found"`). | Both failures can be shown on demand instead of waiting for the random 15% timeout. |
+| 2026-08-20 | `forceFailure` is an argument to `getCachedQuote`, so it's part of the cache key. | Otherwise a cached success replays and the menu looks broken. |
+| 2026-08-20 | `null` is turned into `undefined` before `forceFailure` is sent. | `JSON.stringify` sends `null`, which fails the `z.enum` check. |
+| 2026-08-20 | The request body is checked with a Zod schema (`text`, `accountId`, optional `forceFailure`) using `safeParse`. | Replaces hand-written `if` checks. `safeParse` never throws, so it fits the guard-clause style. |
+| 2026-08-20 | Any `accountId` problem reports "Please log in". Text errors keep their specific messages. | Zod's wording never reaches a buyer, but "too long" and "empty" need different fixes. |
+| 2026-08-20 | Error objects use `satisfies ErrorType`, not `as ErrorType`. | `satisfies` checks the object, `as` silences the check. It caught a live `type: "parse failed"` typo. |
+| 2026-08-26 | `findClosestMatches(query)` imports `catalog.json` itself, like `lookupProduct`. | Keeps the call site a one-argument function. |
+| 2026-08-26 | `findClosestMatches` returns `{ product: Product; score: number }[]`. | A suggestion must be selectable, so it needs the full product. The score belongs to the match, not the product. |
+| 2026-08-26 | The "too different, suggest nothing" cutoff is applied inside the helper. Callers never check the score. | "Close enough" is decided once, in one place. |
+| 2026-08-26 | Track C owns the suggestion function in `lib/agent/`, and Track B wires it into `route.ts`. | Same split as `parseOrder`: nobody edits `route.ts` from another track. |
+| 2026-08-26 | Suggestions are an optional field on the `unmatched` variant of `LineItemResult`, not on `ErrorType`. | `ErrorType` is used app-wide, and suggestions only matter for a catalog miss. |
+| 2026-08-26 | `LineItemResult` replaces the shared `type: "not found"`: `status: "unmatched"` means no catalog match (the only case that gets suggestions), and a matched quote with a `stockError` is an ERP miss. | One type used to cover two different failures, told apart only by which field carried them. |
+| 2026-08-26 | Catalog SKUs changed from `SKU-1001`–`SKU-1008` to codes like `PER-2284`, `ACC-3391` and `DSP-7742`, and the order history was updated to match. | The old SKUs differed by one digit, so every product was one typo from every other and fuzzy matching couldn't tell them apart. |
+| 2026-08-26 | Fuzzy matching uses `fastest-levenshtein`. | `leven` only supports import styles that caused issues here. `fuzzysort` is built for search ranking, and its scores don't compare fairly between a name and a SKU. |
+| 2026-08-26 | Fuzzy matching compares the buyer's text against each word of a product name, not the whole name. | A one-word typo like "kabord" looks very different from "Mechanical Keyboard" as a whole. |
+| 2026-08-26 | The fuzzy cutoff is 40% of the typed text's length, raised from 30%. | 30% rejected "kabord" for "keyboard". Re-tested every typo case plus nonsense ("banana"). |
+| 2026-08-26 | A `lookupProduct` miss falls through to `findClosestMatches`. | "wireless mice" now gets a suggestion instead of a dead end. |
+| 2026-08-26 | `parseOrder` calls Claude at `temperature: 0`. | The same typo was sometimes silently corrected and sometimes not, so exact matching was inconsistent. |
+| 2026-08-26 | `tool_choice` is `"any"` instead of `"auto"`. | Claude sometimes answered without calling a tool, which `parseOrder` had no handling for. |
+| 2026-09-02 | Per-item pricing lives in `priceItems(account, items, forceFailure)` in `lib/erp/priceItems.ts`, shared by both quote routes. | Both paths return the same response shape. |
+| 2026-09-02 | Added `POST /api/quote/items` (`{ accountId, items: [{ sku, quantity }], forceFailure? }`), which skips `parseOrder` and Claude. | A caller that already knows the SKUs has nothing to parse. Faster, cheaper, and the same answer every time. |
+| 2026-09-02 | The reorder page has one text box, with no separate "add by SKU" field. | The paste box already accepts SKUs. One entry point. |
+| 2026-09-02 | Text that is only product codes (`parseSkuList`) goes to `/api/quote/items`; anything with words goes to `/api/quote`. Codes starting with `inv-`, `order-` or `po-` are excluded, so a PO lookup still goes through Claude. | Skips Claude when there's nothing to interpret. |
+| 2026-09-02 | Lookup results drop straight into one editable cart ("Your Cart"), with no separate add-to-cart step or floating panel. A new paste adds to the same cart. | Simpler than a persistent cart that builds up across many searches. |
+| 2026-09-02 | Matched rows go into the cart. Everything else goes to "Couldn't add these" with its suggestions, and picking one adds it to the cart. | |
+| 2026-09-02 | The cart lives in React Context (`DraftOrderProvider`), in memory, and is lost on refresh. | Demo scope. A real cart would be server-backed. `localStorage` is the middle option. |
+| 2026-09-02 | The cart context lives in `DraftOrderContext.tsx`, separate from the `DraftOrder` component. | The paste box and the Orders page can both add to the cart without prop drilling. |
+| 2026-09-02 | `addLines` merges by sku, adding quantities. A merged row keeps its original source and `sourceRef`. | One row per product. The rare mixed source is low stakes. |
+| 2026-09-02 | The cart re-prices on every change, debounced 500ms, through `/api/quote/items`. Price is never stored on a cart line. Quantities below 1 clamp to 1. | The numbers on screen always match the current catalog and account. Narrowed 2026-09-15. |
+| 2026-09-02 | The cart and order cards show Sub Total, Discount, Tax (7%, after discount), Total and Internal Cost. `priceItems` returns `listPrice` and `internalCost` per row. | The same breakdown the invoice used. |
+| 2026-09-02 | `Product.internalCost` added (about 60% of `basePrice`), admin only: the API sends the number to admins and `"hidden"` to everyone else. | Same rule `visibleInvoice()` uses. Changed 2026-09-15. |
+| 2026-09-02 | Typing a PO number like `inv-1001` drops that order's lines into the cart instead of showing an invoice card. Removed the card, its tax math, `formatInvoiceDate` and the `Results` union. | It works the same as reordering a past order. The backend invoice lookup is unchanged. |
+| 2026-09-02 | Added the `/orders` page and an "Orders" sidebar item. | Listing past orders is basic and shouldn't need a sentence for Claude. |
+| 2026-09-02 | Orders show as cards with a checkbox per line (checked by default, disabled for a discontinued sku) and an editable quantity. "Add selected to your order" adds ticked lines to the cart. | |
+| 2026-09-02 | The Orders page uses a native `<input type="checkbox">`. | `components/ui/checkbox.tsx` was removed earlier, and re-adding it wasn't worth it for one column. |
+| 2026-09-02 | The demo `forceFailure` value is also sent on the cart's re-price requests, through a prop on `DraftOrder`. | A forced timeout used to re-price cleanly, so the error never showed. |
+| 2026-09-02 | `priceItems`'s ERP "not found" row keeps its `sku`. | The catalog match succeeded, so the cart can still show the row and its error. Narrows the 2026-08-20 "not found keeps nothing" rule to this path. |
+| 2026-09-02 | Two banners above the cart: red when a line failed, otherwise an orange "stock may be a few hours old" reminder. | Changed 2026-09-15. |
+| 2026-09-02 | A line from a PO or past order shows a green tag ("from inv-1001"), and a line from a suggestion shows "suggested". `DraftLine` gained `sourceRef`. | The buyer can see where each line came from. Typed lines show nothing. |
+| 2026-09-02 | A `sonner` toast confirms each add. The Orders page keeps an inline confirmation with a link back to the reorder page. | The buyer has to navigate off the Orders page. |
+| 2026-09-02 | Removed the debug routes (`ping`, `lookup`, `stock`, `price`, `test`, `track-a-test`) and `testt.ts`. | One-line stubs and scratch files. |
+| 2026-09-02 | `useIsMobile` and `useIsBelowLg` share one `useSyncExternalStore` helper in `hooks/use-mobile.ts`. | Also removed a `set-state-in-effect` lint warning. |
+| 2026-09-02 | Comments in the cart, activity log and orders code rewritten in plain language, with descriptive names. | Easier to read. |
+| 2026-09-03 | `POST /api/orders` prices the whole order once and saves a full `Invoice` to `invoices.json`: per line `listPrice`, `price` and `internalCost`, plus `subtotal`, `discount`, `tax`, `totalAmount` and `internalCost`. Readers display the stored numbers and never price anything. | Orders used to be re-priced on every load, so the totals shown were never the totals the buyer agreed to. |
+| 2026-09-03 | All order money math lives in `lib/erp/summarizeOrder.ts` (`TAX_RATE`, `summarizeOrder`). `DraftOrder.tsx` and the Orders page import `TAX_RATE`. | One source instead of separate `0.07`s. |
+| 2026-09-03 | New order ids continue the invoice numbers: `inv-<highest + 1>`. | A placed order can be pasted back into the reorder box like any other invoice, because it is one. |
+| 2026-09-03 | Deleted `order-history.json`, `lib/erp/order.ts` and the `Order` type. Their functions moved into `lib/erp/invoice.ts` as `getAllInvoices`, `getAccountInvoices` and `saveInvoice`. | Orders and invoices are one thing now. |
+| 2026-09-03 | `GET /api/orders` runs each invoice through `visibleInvoice`. | The same role gate the paste flow uses. No second set of rules. |
+| 2026-09-03 | The `get_order_history` tool keeps its name and returns invoices. | To a buyer, past orders and invoices are the same list. |
+| 2026-09-04 | Deleted dead files: `components/EmptyState.tsx`, `components/Spinner.tsx`, `components/activity-log/testData.ts`, `components/ui/select.tsx`, `components/ui/label.tsx`, and the `SelectAccount` component. | No importers found. |
+| 2026-09-04 | Removed `app/claudetest/page.tsx` and its nav link. | It posted to the deleted `/api/test`, so it 404'd on every submit. |
+| 2026-09-14 | `priceItems` checks stock for every item at the same time. | Each check is independent. A 5-item paste used to run 5 checks back to back. |
+| 2026-09-14 | Four quick-action buttons on the Reorder page: last invoice, look up a PO, simulate a stock delay, paste a product list. They only fill the text box, and stay disabled until an account is picked, with a note explaining why. | Fast demos. Every quote needs an account. |
+| 2026-09-14 | "Reorder my last order" has Claude pick one exact invoice, which plain code then fetches, instead of letting Claude choose products from the history. | Claude lost track of the source invoice (no tag or date in the cart) and once mixed items from two invoices. |
+| 2026-09-14 | Lead time depends on the account: +2 days if the product ships from another warehouse, −1 day for contract accounts, never below 1. | Same idea as account-based pricing. |
+| 2026-09-15 | Cart re-pricing and the Orders page log every failure (stock check, pricing request, network). | Neither logged failures before, and the Orders page had no log wiring at all. |
+| 2026-09-15 | Failed stock checks are logged one line per distinct reason, naming every affected item. The banner says "N items could not be checked". | One item's error was never true for all of them, and a timeout and a "not found" used to log identical text. |
+| 2026-09-15 | Stock failures show the product name, not the SKU, including on the rare unexpected-error path in `priceItems`. | `priceItems` already had the matched product. |
+| 2026-09-15 | `errorMessages.ts` rewording: the timeout message says the cart rechecks on its own; "not found" doesn't always say "product"; "invalid input" drops form-validation phrasing. | Messages promised actions the buyer couldn't take, or named the wrong thing. |
+| 2026-09-15 | `ErrorMessage.tsx` shows the server's specific message first, and falls back to the generic one. | The specific message, like "Invoice with ID inv-9999 not found.", was being thrown away. |
+| 2026-09-15 | Seeded 3 more invoices, so every demo account has at least 3 (1 to 8 items) and one (account 3) covers every product. | Better demos. |
+| 2026-09-15 | The cart, the activity log and the text box all clear on an account switch through one hook, `useResetOnAccountSwitch`. | They each had a copy of the same `useRef`/`useEffect`. |
+| 2026-09-15 | Stale stock logs a line. Staleness is one shared `isStale()` used by the log and the banner. | Stale stock never logged, because it isn't a failure. |
+| 2026-09-15 | The Stock cell wraps text. | The longer timeout message pushed the table wide and shrank the activity sidebar. |
+| 2026-09-15 | The cart only re-checks lines that are new, previously failed or stale. `forceFailure` clears itself after one use. | Forcing a failure while adding one item flagged every item already in the cart. |
+| 2026-09-15 | `refreshPrices` reads `forceFailure` through a ref instead of depending on it. | Resetting it triggered an unforced re-price that quietly overwrote the failure being shown. |
+| 2026-09-15 | "Place order" is disabled while any line has a stock error, with a message explaining why, and `placeOrder()` checks again. | Nothing stopped an order being placed on a failed stock check. |
+| 2026-09-15 | `POST /api/orders` re-checks stock fresh and uncached right before saving, and rejects the whole order naming the products it couldn't confirm. | It only checked that each sku existed. Changed 2026-11-12. |
+| 2026-09-15 | Renamed the `setForceFailure` prop to `setForceFailureAction`. | With `cacheComponents` on, Next requires function props on a `"use client"` component to be named `action` or end in `Action`. |
+| 2026-09-15 | "Couldn't add these" rows can be dismissed one at a time, or all at once with "Clear". | There was no way to dismiss anything. |
+| 2026-09-15 | A cart line with no priced result yet shows a pulsing placeholder. | "—" means hidden data, so an in-progress row looked finished. |
+| 2026-09-15 | A purple "Updating cart..." banner shows while a lookup runs, even when the cart has items. | The spinner only showed on an empty cart. |
+| 2026-09-15 | The Internal Cost row is hidden entirely for non-admins. | It's restricted for them 100% of the time, unlike Warehouse or Stock. |
+| 2026-09-15 | `GET /api/orders` returns every account's invoices for admin. The Orders page shows which account an order belongs to only when more than one appears. | Admin could only fetch one invoice by typing its id. Buyers' and managers' views are unchanged. |
+| 2026-09-15 | The README's "Accounts and roles" section explains buyer and manager are customers, admin is supplier staff, and notes the assisted-ordering gap. | Documented instead of built. |
+| 2026-09-20 | Vitest is the test runner. | Handles TypeScript and modern imports with almost no setup, and runs fast. |
+| 2026-09-20 | Added `jsdom` and React Testing Library. | The cart hook tests will need them. Saves a second setup PR. |
+| 2026-09-20 | Left out `@vitejs/plugin-react`. | It clashed with the Babel 7 that `shadcn` brings in, and plain `.ts` tests don't need it. |
+| 2026-09-20 | Bumped `@types/node` from 20 to 22. | We run Node 22, and Vitest wouldn't install with the old types. |
+| 2026-09-20 | The Vitest config is `vitest.config.mts`, without setting `"type": "module"`. | Node warned on `.ts`. `.mts` marks a modern module without changing how other config files load. |
+| 2026-09-20 | `@/` imports in tests use Vite's built-in `resolve.tsconfigPaths`. Removed `vite-tsconfig-paths`. | The plugin is no longer needed. |
+| 2026-09-20 | Unit tests sit next to the code they test (`fuzzyMatch.test.ts` beside `fuzzyMatch.ts`). End-to-end tests get their own folder. | Easy to find the test for a file. |
+| 2026-09-20 | The first test covers `findClosestMatches`: a typo, letter case, and nonsense. One was made to fail on purpose. | A plain function that already existed. The deliberate failure confirms the runner really checks results. |
+| 2026-11-11 | CI runs on pushes and PRs to `staging` and `main`: lint, type check and Vitest, then Playwright against a local production build. The Playwright specs use the local server, not the live demo. | Tests check the branch's own code. Closes the 2026-08-19 and 2026-09-20 CI TODOs. |
+| 2026-11-11 | Regenerated `package-lock.json`, which was missing `@playwright/test`. Vitest skips the `tests/` folder. | `npm ci` failed on the lockfile, and Vitest was running the Playwright specs. |
+| 2026-11-12 | Seeing stock and confirming stock are separate. `seeStock` only decides whether a number is shown. `POST /api/orders` always checks stock through `checkStock()`, for every role. | A buyer who couldn't see a product's stock could place an order with no stock check at all. |
+| 2026-11-12 | An order is rejected when any sku's total quantity across lines is more than its stock. The message shows the available count only to roles allowed to see it. | Orders only checked that the stock call succeeded, never that there was enough. |
+| 2026-11-12 | `POST /api/orders` returns `visibleInvoice()`, not the stored invoice. | It was sending internal cost and discount to every role. |
+
+## Open TODOs
+
+| Date | TODO | Reason |
+| --- | --- | --- |
+| 2026-08-06 | Add a filter by event category to the activity log UI. | Events carry a `category` since 2026-08-18, but the log shows everything at once. Filtering by errors, orders or stock checks helps debugging and demos. |
+| 2026-08-12 | If regional routing is ever needed (nearest warehouse with stock, several warehouses per account), change the data model and the warehouse comparison. | Today it's a flat equality check. |
+| 2026-08-18 | `mapStockErrorToReason` picks the error type by checking whether the message includes "timed out". Move to error codes or error classes in `mockERP.ts`. | It breaks silently the first time the wording changes, and anything unrecognized becomes `"invalid input"`. |
+| 2026-08-19 | Define an `ERPAdapter` interface (for example `getStock(sku)`) that `mockERP.ts` implements, instead of importing `getERPStock` and the data files directly. | "Swappable backend" isn't enforced by the types, so a second backend could quietly not match. The cheapest, highest-value item. |
+| 2026-08-19 | Move `forceFailure` off the public request schemas, behind a dev-only path or an env check. | Any caller can force a failure, including on the live demo. |
+| 2026-08-19 | Check required env vars (`ANTHROPIC_API_KEY`) once at startup, with Zod. | Today a missing key only shows up as "Couldn't read that order." wherever the client first runs. |
+| 2026-08-20 | The parser drops items when a quantity trails the name: `"2 mouses, 2 lanterns"` returns two items, but `"mouse 2, page 2"` returns one item named "mouse". Look at the tool description in `recordItemsTool.ts`. | Trailing numbers are read as model numbers, not quantities. |
+| 2026-08-20 | Cache `parseOrder` results for the same text and account. | It dominates request time now that ERP calls are cached. `temperature: 0` already makes it deterministic. |
+| 2026-08-27 | Claude silently corrects misspelled products: `"2 wireless mise"` becomes a finished quote for Wireless Mouse with no sign the words changed. Show it as a "did you mean", not a silent swap. | A quote commits money to a product the buyer didn't type. `temperature: 0` made the correction consistent, not visible. |
+| 2026-08-27 | Add `correctedFrom: string \| null` to each item in `recordItemsTool.ts`: the buyer's original wording when Claude changed it, `null` when it didn't. | `confidence` can't carry this (a corrected input scored higher than a clean one), and branching on the free-text `note` means string matching. |
+| 2026-08-27 | Decide hard or soft handling for corrected items. Hard: an unmatched row the buyer confirms. Soft: still quote it, but mark the row ("Wireless Mouse, you typed 'mise'"). | Soft fit while this screen only quoted, and hard was the plan once it placed orders. The cart has placed orders since 2026-09-02, so revisit this. |
+| 2026-08-27 | A correct word can fail where a typo succeeds: "wireless mice" is left alone by Claude, and `lookupProduct`'s `.replace(/s$/, "")` doesn't turn mice into mouse (also boxes, knives, feet). Match on `productGuess.attributes` too, or rely on the fuzzy suggestion. | The misspelled input gets a clean quote while the correct one gets a "did you mean". |
+| 2026-09-02 | Persist the cart with `localStorage` or a server cart. | The cart is lost on refresh. |
+| 2026-09-02 | Warn when a PO or stored invoice has a sku that has left the catalog. | The line is added to the cart but won't price, with no warning. |
+| 2026-09-03 | `saveInvoice` reads then writes `invoices.json` with no lock. | Two orders placed at the same instant could overwrite each other. Fine at demo scale. |
+| 2026-09-04 | Rewrite the dot spinner in `components/Loader.tsx` in Tailwind or plain CSS, and drop `styled-components`. | It's the dependency's only use. Everything else is Tailwind. |
+| 2026-09-04 | Split `components/draft-order/DraftOrder.tsx` into a pricing hook plus a few presentational pieces. | Over 500 lines doing five jobs: re-pricing, totals, banners, table markup and placing the order. |
+| 2026-09-04 | Split `lib/erp/` into the fake ERP (`mockERP.ts`, `accountRules.ts`) and our own order and pricing logic (`invoice.ts`, `summarizeOrder.ts`, `priceItems.ts`). | The folder originally meant "the fake ERP system" and keeps growing. |
+| 2026-09-14 | Allow a partial reorder, or a changed quantity, through the "last order" path. | That path always returns the whole invoice. |
+| 2026-09-14 | Test "last order", "last invoice" and "items from my last invoice" live with a real API key, across a few accounts. | The fix depends on Claude following the new tool instructions. |
+| 2026-09-15 | The cart keeps a cached price per sku until something forces a recheck (a new item, a past failure, stale stock, an account switch). | A real catalog price change would go unnoticed until then. |
+| 2026-09-15 | Assisted ordering: an admin placing an order on behalf of a customer. | An order placed as admin is saved under admin's own account. Documented in the README instead of built. |
+| 2026-09-20 | `npm audit` shows 4 vulnerabilities (1 critical) in `next` 16.2.12 (with `postcss` and `sharp`) and `js-yaml`. Bump `next` and `eslint-config-next` to 16.3.5, then run `npm audit fix`. | None come from the test packages. |
+| 2026-09-20 | Add `@vitejs/plugin-react` when we start testing `.tsx` components, if needed. | It needs a version that works with `shadcn`'s Babel. |
+| 2026-09-20 | Add an `.nvmrc` or an `engines` field so everyone uses Node 22, and switch CI from Node 20 to 22 to match. | The team runs Node 22, but CI and the README say Node 20. |
+| 2026-09-20 | Write the next tests: `parseSkuList`, then the cart code (`computeCartTotals`, `isStale`, `useCartPricing`) once the cart refactor is merged, then more end-to-end flows. | Playwright is set up since 2026-11-11. |
