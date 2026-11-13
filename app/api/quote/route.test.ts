@@ -39,6 +39,9 @@ function parsedProduct(quantity: number | null) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.unstubAllEnvs();
+  // a fake key, so the route thinks Claude is available (parseOrder itself is mocked)
+  vi.stubEnv("ANTHROPIC_API_KEY", "test-key");
   vi.mocked(parseOrder).mockResolvedValue({
     type: "products",
     products: [parsedProduct(1)],
@@ -63,6 +66,36 @@ describe("POST /api/quote: text length limit (#6)", () => {
 
     expect(status).toBe(200);
     expect(parseOrder).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("POST /api/quote: no Anthropic key (#12)", () => {
+  it("refuses with a message pointing at product codes, without calling Claude", async () => {
+    vi.stubEnv("ANTHROPIC_API_KEY", "");
+    const { status, body } = await quote("2 wireless mice");
+
+    expect(status).toBe(503);
+    expect(body.error).toEqual({
+      type: "request failed",
+      message:
+        "Looking up products by name isn't available right now. Paste product codes instead, like PER-2284 x2.",
+    });
+    expect(parseOrder).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/quote: when parsing fails (#12)", () => {
+  it("logs the real error, then gives the buyer a plain message", async () => {
+    const realError = new Error("Claude returned the wrong shape");
+    vi.mocked(parseOrder).mockRejectedValue(realError);
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const { status, body } = await quote("2 wireless mice");
+
+    expect(status).toBe(400);
+    expect(body.error).toEqual({ type: "request failed", message: "Couldn't read that order." });
+    expect(consoleError).toHaveBeenCalledWith("[api/quote] parseOrder failed:", realError);
+    consoleError.mockRestore();
   });
 });
 
