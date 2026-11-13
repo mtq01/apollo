@@ -4,11 +4,21 @@ import { parseOrder } from "@/lib/agent/parseOrder";
 import { lookUpInvoice } from "@/lib/erp/invoice";
 import { z } from "zod";
 import { priceItems } from "@/lib/erp/priceItems";
+import { MAX_ORDER_TEXT_LENGTH } from "@/lib/orderLimits";
+import { hasAnthropicKey } from "@/lib/env";
 
 // Creating a zod schema to validate the user input. we need to do this because
 // it is coming from an outside source and typescript cannot validate it at runtime
 const userRequest = z.object({
-  text: z.string("text is required").trim().min(1, "text can't be empty."),
+  text: z
+    .string("text is required")
+    .trim()
+    .min(1, "text can't be empty.")
+    // this text goes to Claude, so an unlimited paste would be an unlimited bill
+    .max(
+      MAX_ORDER_TEXT_LENGTH,
+      `That's too long. Paste up to ${MAX_ORDER_TEXT_LENGTH.toLocaleString("en-US")} characters at a time.`,
+    ),
   accountId: z
     //.EXPECTED("ERROR MESSAGE")
     .number("The account id is not a number or null")
@@ -81,7 +91,27 @@ export async function POST(request: Request) {
     );
   }
 
-  const parsed = await parseOrder(text, account).catch(() => null);
+  /* No key means Claude can't be called at all. Say so plainly and point the buyer at
+     the path that still works, instead of failing inside parseOrder with a vague error.
+     The startup warning (instrumentation.ts) tells whoever runs the server why. */
+  if (!hasAnthropicKey()) {
+    return Response.json(
+      {
+        error: {
+          type: "request failed",
+          message:
+            "Looking up products by name isn't available right now. Paste product codes instead, like PER-2284 x2.",
+        } satisfies ErrorType,
+      },
+      { status: 503 },
+    );
+  }
+
+  // Log the real reason before replacing it with a buyer-friendly message, so it isn't lost.
+  const parsed = await parseOrder(text, account).catch((error: unknown) => {
+    console.error("[api/quote] parseOrder failed:", error);
+    return null;
+  });
 
   if (parsed === null) {
     return Response.json(

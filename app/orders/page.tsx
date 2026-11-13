@@ -32,6 +32,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { TAX_RATE } from "@/lib/erp/summarizeOrder";
+import { clampQuantity, MAX_QUANTITY } from "@/lib/orderLimits";
 
 // One line of a past order, priced by GET /api/orders. productName and price
 // are null when the sku has left the catalog.
@@ -137,7 +138,7 @@ export default function OrdersPage() {
           Select an account to see your past orders.
         </p>
       ) : errorMessage ? (
-        <p className="text-sm text-red-700">{errorMessage}</p>
+        <p role="alert" className="text-sm text-red-700">{errorMessage}</p>
       ) : orders === null ? (
         <p className="text-sm text-gray-600">Loading…</p>
       ) : orders.length === 0 ? (
@@ -145,7 +146,7 @@ export default function OrdersPage() {
       ) : (
         <>
           {addedMessage && (
-            <p className="mb-6 text-sm text-green-700">
+            <p role="status" className="mb-6 text-sm text-green-700">
               {addedMessage}{" "}
               <Link href="/" className="underline hover:no-underline">
                 Go to Reorder
@@ -307,15 +308,13 @@ function OrderCard({
                   <Input
                     type="number"
                     min={1}
+                    max={MAX_QUANTITY}
                     value={quantities[item.sku]}
                     disabled={!available}
                     onChange={(event) =>
                       setQuantities((current) => ({
                         ...current,
-                        [item.sku]: Math.max(
-                          1,
-                          Math.floor(Number(event.target.value) || 1),
-                        ),
+                        [item.sku]: clampQuantity(Number(event.target.value) || 1),
                       }))
                     }
                     className="w-20"

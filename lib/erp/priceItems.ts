@@ -1,8 +1,8 @@
-import { cacheTag } from "next/cache";
 import { getQuoteForProduct } from "@/lib/erp/productQuote";
 import { lookupProduct } from "@/lib/erp/productLookup";
 import { suggestAlternatives } from "@/lib/agent/suggestAlternatives";
-import type { Product, UserContext, ErrorType, ForcedFailure } from "@/types";
+import { isValidQuantity, MAX_QUANTITY_LABEL } from "@/lib/orderLimits";
+import type { UserContext, ErrorType, ForcedFailure } from "@/types";
 
 /* One line item to price. `sku` or `productName` may be null; the loop resolves
    whichever is present against the catalog. `rawText` is what we show the buyer
@@ -14,34 +14,17 @@ export type PriceableItem = {
   rawText: string;
 };
 
-async function getCachedQuote(
-  account: UserContext,
-  product: Product,
-  forceFailure?: ForcedFailure,
-) {
-  /*
-[Caching]
-    - What it does: do the call once, save the answer, and hand the saved
-      answer back if the same request comes in again.
-
-    - Why it's needed here: every quote runs an ERP stock call, ~300-1500ms.
-      Ask for the same product again with nothing changed and it does the
-      round trip again for the same answer.
-
-    - What's actually slow: only the stock lookup. mockERP.ts deliberately
-      waits. Price is instant maths, and lead time and warehouse are facts
-      already sitting in catalog.json. So the product is free; the quote
-      costs a round trip.
-*/
-
-  "use cache";
-  cacheTag("stock");
-  return getQuoteForProduct({ account, product }, forceFailure);
-}
-
 /* Resolves each item against the catalog and builds a priced quote row for it.
    Shared by the text path (/api/quote, after parseOrder) and the deterministic
-   path (/api/quote/items, where the SKU is already known). */
+   path (/api/quote/items, where the SKU is already known).
+
+   [No caching, on purpose]
+   Every call checks stock with the ERP. Quotes used to be cached with
+   "use cache", which handed back the same saved quote for the same account and
+   product: the stock number never refreshed, the activity log replayed old
+   "Stock Checked" lines for checks that never ran, and a saved failure stayed
+   failed. The cart already avoids repeat checks on its own (it only re-checks
+   new, failed or stale lines), and all items are checked in parallel. */
 export async function priceItems(
   account: UserContext,
   items: PriceableItem[],
@@ -53,6 +36,23 @@ export async function priceItems(
   - Promise.all keeps the result order lined up with `items`, same as the old for-loop did. */
   return Promise.all(
     items.map(async (item) => {
+      /* Claude can read a quantity we can't price: 0, -1, 2.5 ("2.5 boxes"), or a huge number.
+         Don't guess what the buyer meant, and don't let it into the cart, where it would fail
+         every re-price. Return it as a row the buyer can see and fix. (null is fine: it means
+         the buyer gave no quantity, and the page treats that as 1.) */
+      if (item.quantity !== null && !isValidQuantity(item.quantity)) {
+        return {
+          status: "unmatched",
+          rawText: item.rawText,
+          matchError: {
+            type: "invalid input",
+            message: `Couldn't use the quantity ${item.quantity}. Enter a whole number from 1 to ${MAX_QUANTITY_LABEL}.`,
+          } satisfies ErrorType,
+          suggestions: [],
+          quantity: null,
+        };
+      }
+
       const product = lookupProduct({
         sku: item.sku,
         productName: item.productName,
@@ -76,10 +76,10 @@ export async function priceItems(
 
       try {
         /* getQuoteForProduct no longer throws on a failed stock check, it always returns normally and reports the failure via 
-        `stockError` on the result instead (see DECISIONS.md, Aug 18). So the quote already carries whatever succeeded (price, 
+        `stockError` on the result instead (see docs/DECISIONS.md, Aug 18). So the quote already carries whatever succeeded (price, 
         warehouse, etc.) plus the error for what didn't. */
 
-        const quote = await getCachedQuote(account, product, forceFailure); 
+        const quote = await getQuoteForProduct({ account, product }, forceFailure); 
 
         if (quote.stockError?.type === "not found") {
           // the catalog match succeeded; it's the ERP that couldn't confirm it.
@@ -110,11 +110,15 @@ export async function priceItems(
               : ("hidden" as const),
         };
       } catch {
-        // Only reached for a genuinely unexpected error, not a stock-check failure, that's already handled above via `quote.stockError`.
+        /* Only reached for a genuinely unexpected error, not a stock-check failure, that's already handled above via `quote.stockError`.
+           Same shape as any other failed line (stock "error" plus a stockError), and it keeps its sku: the cart
+           matches results to lines by sku, so a row without one is dropped and the line never shows it failed. */
         return {
+          sku: product.sku,
           name: product.name,
           quantity: item.quantity,
-          stock: {
+          stock: "error",
+          stockError: {
             type: "request failed",
             message: "Something went wrong pricing this item.",
           } satisfies ErrorType,

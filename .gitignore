@@ -37,6 +37,7 @@ yarn-error.log*
 # vercel
 .vercel
 
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
@@ -44,3 +45,11 @@ next-env.d.ts
 # prevent test data/logs that get written to disk from being committed
 *.log
 /tmp
+
+# Playwright
+node_modules/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/

@@ -8,6 +8,7 @@ import {
   type PricedRow,
 } from "@/components/draft-order/pricedRow";
 import { buyerErrorMessage } from "@/lib/erp/errorMessages";
+import { MAX_QUANTITY } from "@/lib/orderLimits";
 import { formatSourceDate, formatStockCheckTime } from "@/lib/format";
 
 /* A small pulsing bar for a cell whose line has not been priced yet.
@@ -69,11 +70,12 @@ export function CartLineRow({
         ) : null}
       </TableCell>
 
-      {/* Editable quantity, never below 1. */}
+      {/* Editable quantity, 1 to MAX_QUANTITY (the provider clamps it too). */}
       <TableCell>
         <Input
           type="number"
           min={1}
+          max={MAX_QUANTITY}
           value={line.quantity}
           onChange={(event) =>
             setQuantity(line.sku, Number(event.target.value) || 1)
@@ -111,8 +113,6 @@ export function CartLineRow({
               ? buyerErrorMessage(pricedRow.stockError)
               : "Stock check failed."}
           </span>
-        ) : stockLevel ? (
-          <span className="text-red-900">{buyerErrorMessage(stockLevel)}</span>
         ) : (
           orPlaceholder(null, isRowLoading)
         )}

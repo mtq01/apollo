@@ -10,7 +10,9 @@ type CartBannersProps = {
 
 /* One banner at most, in this order: lookup in progress, stock failure,
    then the stale-data reminder. The text stays general because each row and
-   the activity log already show the real reason. */
+   the activity log already show the real reason.
+   Screen readers: the red one stays an alert (it blocks the order); the
+   other two are role="status", read out politely without interrupting. */
 export function CartBanners({
   isLoading,
   failedCount,
@@ -18,7 +20,7 @@ export function CartBanners({
 }: CartBannersProps) {
   if (isLoading) {
     return (
-      <Alert className="my-3 border-purple-300 bg-purple-100 text-black">
+      <Alert role="status" className="my-3 border-purple-300 bg-purple-100 text-black">
         <Loader2 className="animate-spin" />
         <AlertDescription>Updating cart...</AlertDescription>
       </Alert>
@@ -39,7 +41,7 @@ export function CartBanners({
 
   if (hasStaleStock) {
     return (
-      <Alert className="my-3 border-amber-300 bg-orange-100 text-black">
+      <Alert role="status" className="my-3 border-amber-300 bg-orange-100 text-black">
         <AlertTriangleIcon />
         <AlertDescription>
           Stock data may be a few hours old, please <strong>call</strong> to

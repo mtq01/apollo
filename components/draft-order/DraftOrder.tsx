@@ -109,7 +109,7 @@ export function DraftOrder({
       />
 
       {errorMessage && (
-        <p className="mt-2 text-sm text-red-700">{errorMessage}</p>
+        <p role="alert" className="mt-2 text-sm text-red-700">{errorMessage}</p>
       )}
 
       {/* Explains why the button is off when a stock check failed. */}

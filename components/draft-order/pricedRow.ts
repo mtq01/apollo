@@ -9,7 +9,7 @@ export type PricedRow = {
   price?: number; // per unit, after discount
   listPrice?: number; // per unit, before discount
   internalCost?: number | "hidden" | null; // per unit; admins only
-  stock?: number | "hidden" | "error" | ErrorType;
+  stock?: number | "hidden" | "error";
   stockError?: ErrorType; // set when the stock check failed
   leadTime?: number; // days until it ships
   warehouse?: string | "hidden";

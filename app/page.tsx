@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { MAX_ORDER_TEXT_LENGTH } from "@/lib/orderLimits";
 
 /* One row from either quote endpoint. Everything is optional because a row is
    one of three things: a priced match, an ERP miss (an error, no price), or a
@@ -33,7 +34,7 @@ import { Button } from "@/components/ui/button";
 type QuoteRow = {
   name?: string;
   quantity: number | null;
-  stock?: number | "hidden" | "error" | ErrorType;
+  stock?: number | "hidden" | "error";
   stockError?: ErrorType;
   sku?: string;
   price?: number;
@@ -335,6 +336,7 @@ export default function Reorder() {
             value={text}
             onChange={handleChange}
             onKeyDown={handleKeyDown}
+            maxLength={MAX_ORDER_TEXT_LENGTH}
           />
         </label>
 
@@ -374,7 +376,7 @@ export default function Reorder() {
         <div className="mb-8 w-full max-w-2xl">
           <div className="mb-2 flex items-center justify-between">
             <h3 className="text-sm font-medium text-gray-700">
-              Couldn't add these
+              Couldn&apos;t add these
             </h3>
             <button
               onClick={() => setUnmatched([])}

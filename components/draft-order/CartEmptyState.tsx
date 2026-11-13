@@ -16,7 +16,7 @@ export function CartEmptyState({
     return (
       <>
         <h2 className="mb-2 text-lg font-semibold">Your Cart</h2>
-        <p className="text-sm text-green-700">Order {placedOrderId} placed.</p>
+        <p role="status" className="text-sm text-green-700">Order {placedOrderId} placed.</p>
       </>
     );
   }
